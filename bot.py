@@ -108,7 +108,8 @@ def process_symbol(symbol):
             if res['passed']:
                 print(f"   ✅ تصمیم: سیگنال {risk['name']} {dir_text}")
                 send_signal(symbol, analysis, res, direction)
-                return
+                # دیگر return نمی‌کنیم تا بقیه ارزها هم بررسی شوند
+
     print("📭 هیچ سیگنال معتبری یافت نشد")
 
 # ========== تابع اصلی ==========
@@ -121,7 +122,8 @@ def main():
     for i, sym in enumerate(SYMBOLS,1):
         print(f"\n[{i}/{len(SYMBOLS)}] پردازش نماد {sym}")
         process_symbol(sym)
-        if i < len(SYMBOLS): time.sleep(5)
+        if i < len(SYMBOLS):
+            time.sleep(10)   # فاصله بین پردازش هر ارز
 
     print("\n✅ پردازش کامل شد")
     print(f"⏰ پایان: {datetime.now().strftime('%H:%M:%S')}")
