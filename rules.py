@@ -9,7 +9,9 @@ def check_rules_for_level(analysis_data, risk_config, direction):
     last_close = analysis_data['last_close']
     closes = analysis_data['closes']
     data = analysis_data['data']  # raw candles with OHLCV
-    passed_rules, reasons = []
+    passed_rules = []
+    reasons = []
+
 
     # Risk profile parameters
     risk_key = risk_config['key']
