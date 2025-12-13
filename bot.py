@@ -3,10 +3,9 @@ import time
 from datetime import datetime
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SYMBOLS, RISK_LEVELS
 from data_fetcher import fetch_all_timeframes
-from indicators import calculate_rsi, calculate_ema
+from indicators import calculate_rsi, calculate_ema, calculate_macd, body_strength
 from rules import check_rules_for_level
 
-# ========== ارسال سیگنال ==========
 def send_signal(symbol, analysis_data, check_result, direction):
     clean_symbol = symbol.replace('-USDT','')
     emoji = check_result['emoji']
@@ -31,22 +30,49 @@ def send_signal(symbol, analysis_data, check_result, direction):
     except Exception as e:
         print(f"❌ خطا در ارسال سیگنال: {e}")
 
-# ========== پردازش نماد ==========
 def process_symbol(symbol):
     data = fetch_all_timeframes(symbol)
     if not data:
         print(f"❌ دریافت داده ناموفق برای {symbol}")
         return
 
-    # نمایش داده‌های هر تایم‌فریم
-    print(f"\n📊 داده‌های {symbol}:")
-    for tf, candles in data.items():
-        closes = [c[2] for c in candles]
-        print(f"  • {tf}: آخرین قیمت = {closes[-1]:.2f}, تعداد کندل = {len(candles)}")
-
     closes = {tf: [c[2] for c in data[tf]] for tf in data}
-    analysis = {'last_close': closes['5m'][-1], 'closes': closes}
+    analysis = {'last_close': closes['5m'][-1], 'closes': closes, 'data': data}
 
+    print(f"\n📊 گزارش کامل {symbol}:")
+    print("-"*60)
+    print(f"💰 قیمت فعلی: {analysis['last_close']:.2f}")
+
+    # EMA
+    for tf in ['5m','15m','30m','1h','4h']:
+        if tf in closes:
+            ema21 = calculate_ema(closes[tf],21)
+            ema55 = calculate_ema(closes[tf],55)
+            ema200 = calculate_ema(closes[tf],200) if len(closes[tf])>=200 else None
+            print(f"  • {tf}: EMA21={ema21:.2f if ema21 else 'N/A'}, EMA55={ema55:.2f if ema55 else 'N/A'}, EMA200={ema200:.2f if ema200 else 'N/A'}")
+
+    # RSI
+    print("\n📊 RSI:")
+    for tf in ['5m','15m','30m','1h','4h']:
+        if tf in closes:
+            rsi = calculate_rsi(closes[tf],14)
+            print(f"  • {tf}: {rsi:.1f if rsi else 'N/A'}")
+
+    # MACD
+    print("\n🌀 MACD:")
+    for tf in ['5m','15m','30m','1h','4h']:
+        if tf in closes:
+            macd = calculate_macd(closes[tf])
+            print(f"  • {tf}: MACD={macd['macd']:.4f if macd['macd'] else 'N/A'}, Signal={macd['signal']:.4f if macd['signal'] else 'N/A'}")
+
+    # قدرت کندل
+    if '5m' in data:
+        strength_5m = body_strength(data['5m'][-1])
+        print(f"\n🕯️ قدرت کندل 5m: {strength_5m:.2f}")
+
+    print("-"*60)
+
+    # بررسی شرایط سیگنال
     print("\n🔎 بررسی شرایط سیگنال...")
     for direction in ['LONG','SHORT']:
         dir_text = "صعودی" if direction=='LONG' else "نزولی"
@@ -60,7 +86,6 @@ def process_symbol(symbol):
                 return
     print("📭 هیچ سیگنال معتبری یافت نشد")
 
-# ========== تابع اصلی ==========
 def main():
     print("="*80)
     print("🚀 شروع تحلیل و سیگنال‌دهی")
@@ -77,7 +102,6 @@ def main():
     print(f"⏰ پایان: {datetime.now().strftime('%H:%M:%S')}")
     print("="*80)
 
-# ========== اجرا ==========
 if __name__=="__main__":
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print("⚠️ تنظیمات تلگرام را بررسی کنید!")
