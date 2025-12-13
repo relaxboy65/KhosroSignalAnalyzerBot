@@ -1,7 +1,8 @@
 import requests, time
 from datetime import datetime
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SYMBOLS, RISK_LEVELS
-from data_fetcher import fetch_all_timeframes, calculate_rsi, calculate_ema
+from data_fetcher import fetch_all_timeframes
+from indicators import calculate_rsi, calculate_ema
 from rules import check_rules_for_level
 
 def send_signal(symbol, analysis_data, check_result, direction):
