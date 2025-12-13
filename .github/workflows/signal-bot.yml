@@ -2,14 +2,29 @@ name: KhosroSignalAnalyzerBot
 
 on:
   schedule:
-    - cron: "*/15 * * * *"   # هر 15 دقیقه یکبار
-  workflow_dispatch:
+    - cron: "*/15 * * * *"   # هر 15 دقیقه یکبار اجرا شود
+  workflow_dispatch:         # امکان اجرای دستی هم داشته باشد
 
 jobs:
   run:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
-        with: { python-version: '3.11' }
-      - run: pip
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run bot
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python bot.py
