@@ -138,13 +138,13 @@ def check_rules_for_level(analysis_data, risk_config, direction):
 
     passed_count = len(passed_rules)
 
-    # Decision thresholds
+    # Decision thresholds (سخت‌گیرتر)
     if risk_key == 'LOW':
-        decision = passed_count >= 8   # ~90%
+        decision = passed_count >= 9   # همه قوانین باید پاس شوند
     elif risk_key == 'MEDIUM':
-        decision = passed_count >= 6   # ~70%
+        decision = passed_count >= 7   # حدود 78%
     else:
-        decision = passed_count >= 5   # ~60%
+        decision = passed_count >= 6   # حدود 67%
 
     return {
         'passed': decision,
