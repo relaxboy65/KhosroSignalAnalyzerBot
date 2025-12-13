@@ -1,10 +1,8 @@
 import os
 
-# ========== تنظیمات ==========
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
-# سطوح ریسک
 RISK_LEVELS = [
     {
         'key': 'LOW',
@@ -50,5 +48,4 @@ RISK_LEVELS = [
     }
 ]
 
-# نمادها
 SYMBOLS = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT']
