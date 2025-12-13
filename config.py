@@ -49,6 +49,7 @@ RISK_LEVELS = [
 ]
 
 SYMBOLS = [
+    'XAU-USDT', 'XAG-USDT',  # طلا و نقره
     'BTC-USDT', 'ETH-USDT', 'BNB-USDT', 'SOL-USDT', 'XRP-USDT',
     'ADA-USDT', 'DOGE-USDT', 'DOT-USDT', 'MATIC-USDT', 'LTC-USDT',
     'TRX-USDT', 'AVAX-USDT', 'ATOM-USDT', 'XLM-USDT', 'NEAR-USDT',
