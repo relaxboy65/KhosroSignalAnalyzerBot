@@ -104,9 +104,9 @@ def process_symbol(symbol):
         print(f"\n➡️ بررسی جهت {dir_text}:")
         for risk in RISK_LEVELS:
             res = check_rules_for_level(analysis, risk, direction)
-            print(f"   سطح {risk['risk_name']} → قوانین گذرانده: {res['passed_count']}/9 | دلایل: {', '.join(res['reasons'])}")
+            print(f"   سطح {risk['name']} → قوانین گذرانده: {res['passed_count']}/9 | دلایل: {', '.join(res['reasons'])}")
             if res['passed']:
-                print(f"   ✅ تصمیم: سیگنال {risk['risk_name']} {dir_text}")
+                print(f"   ✅ تصمیم: سیگنال {risk['name']} {dir_text}")
                 send_signal(symbol, analysis, res, direction)
                 return
     print("📭 هیچ سیگنال معتبری یافت نشد")
