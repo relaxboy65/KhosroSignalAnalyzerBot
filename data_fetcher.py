@@ -17,8 +17,15 @@ def fetch_kucoin_klines(symbol, interval='5min', days=3):
         r = requests.get(url, params=params, timeout=20)
         if r.status_code == 200:
             data = r.json().get('data', [])
-            candles = [[int(c[0]), float(c[1]), float(c[2]),
-                        float(c[3]), float(c[4]), float(c[5])] for c in data]
+            # خروجی به شکل دیکشنری
+            candles = [{
+                't': int(c[0]),
+                'o': float(c[1]),
+                'c': float(c[2]),
+                'h': float(c[3]),
+                'l': float(c[4]),
+                'v': float(c[5])
+            } for c in data]
             return list(reversed(candles))
         elif r.status_code == 429:
             time.sleep(10)
@@ -35,4 +42,3 @@ def fetch_all_timeframes(symbol):
         if candles and len(candles) >= 50:
             data[tf] = candles
     return data
-    
