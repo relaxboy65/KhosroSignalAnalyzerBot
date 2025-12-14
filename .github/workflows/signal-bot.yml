@@ -2,7 +2,8 @@ name: KhosroSignalAnalyzerBot
 
 on:
   schedule:
-    - cron: "*/15 * * * *"   # هر 15 دقیقه یکبار اجرا شود
+    # اجرا در دقیقه 30 از ساعت‌های 9 تا 22 (یعنی 9:30 تا 22:30)
+    - cron: "30 9-22 * * *"
   workflow_dispatch:         # امکان اجرای دستی هم داشته باشد
 
 jobs:
@@ -28,4 +29,3 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           python bot.py
-          
