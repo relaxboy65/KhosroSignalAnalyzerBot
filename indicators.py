@@ -1,176 +1,208 @@
 # indicators.py
 import math
 
-# ===== EMA =====
-def _ema_series(prices, period):
-    if not prices or len(prices) < period:
+# ===== EMA (سری کامل + آخرین مقدار) =====
+def ema_series(prices, period):
+    """محاسبه سری کامل EMA"""
+    if len(prices) < period:
         return [None] * len(prices)
     k = 2.0 / (period + 1)
-    out = [None] * (period - 1)
-    ema = sum(prices[:period]) / period
-    out.append(ema)
+    ema_vals = [sum(prices[:period]) / period]
     for price in prices[period:]:
-        ema = (price - ema) * k + ema
-        out.append(ema)
-    return out
+        ema_vals.append(price * k + ema_vals[-1] * (1 - k))
+    return [None] * (period - 1) + ema_vals
 
 def calculate_ema(prices, period):
-    # سازگار با استفاده فعلی: آخرین EMA را برمی‌گرداند
-    if not prices or len(prices) < period:
-        return None
-    k = 2.0 / (period + 1)
-    ema = sum(prices[:period]) / period
-    for price in prices[period:]:
-        ema = (price - ema) * k + ema
-    return ema
+    """آخرین مقدار EMA (سازگار با کد قدیمی)"""
+    series = ema_series(prices, period)
+    return series[-1] if series else None
 
 # ===== RSI =====
 def calculate_rsi(prices, period=14):
-    if not prices or len(prices) < period + 1:
+    if len(prices) < period + 1:
         return None
-    gains, losses = [], []
+    gains = []
+    losses = []
     for i in range(1, len(prices)):
         change = prices[i] - prices[i - 1]
         gains.append(max(change, 0.0))
         losses.append(max(-change, 0.0))
+    
     avg_gain = sum(gains[:period]) / period
     avg_loss = sum(losses[:period]) / period
+    
+    if avg_loss == 0:
+        return 100.0
+    
+    for i in range(period, len(gains)):
+        avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+        avg_loss = (avg_loss * (period - 1) + losses[i]) / period
+    
     if avg_loss == 0:
         return 100.0
     rs = avg_gain / avg_loss
     return 100.0 - (100.0 / (1.0 + rs))
 
-# ===== MACD (با سری کامل، خروجی آخر سازگار با کد فعلی) =====
-def calculate_macd(prices, fast=12, slow=26, signal=9):
-    if not prices or len(prices) < slow:
-        return {'macd': None, 'signal': None, 'histogram': None}
-    ema_fast = _ema_series(prices, fast)
-    ema_slow = _ema_series(prices, slow)
-    macd_line = [None if ef is None or es is None else (ef - es) for ef, es in zip(ema_fast, ema_slow)]
-    # ساخت سری سیگنال فقط روی مقادیر معتبر
-    valid_macd = [m for m in macd_line if m is not None]
-    if len(valid_macd) < signal:
-        return {'macd': macd_line[-1], 'signal': None, 'histogram': None}
-    signal_series = _ema_series(valid_macd, signal)
-    signal_last = signal_series[-1]
-    hist_last = macd_line[-1] - signal_last if (macd_line[-1] is not None and signal_last is not None) else None
-    return {'macd': macd_line[-1], 'signal': signal_last, 'histogram': hist_last}
+# ===== MACD با سری کامل + مقدار آخر =====
+def calculate_macd(prices, fast=12, slow=26, signal_period=9):
+    if len(prices) < slow + signal_period:
+        return {
+            'macd': None, 'signal': None, 'histogram': None,
+            'macd_series': [], 'signal_series': [], 'hist_series': []
+        }
 
-# ===== ATR برای مدیریت ریسک =====
+    ema_fast = ema_series(prices, fast)
+    ema_slow = ema_series(prices, slow)
+
+    macd_line = []
+    for f, s in zip(ema_fast, ema_slow):
+        if f is not None and s is not None:
+            macd_line.append(f - s)
+        else:
+            macd_line.append(None)
+
+    # سیگنال فقط روی مقادیر معتبر MACD
+    valid_macd = [m for m in macd_line if m is not None]
+    if len(valid_macd) < signal_period:
+        signal_series = [None] * len(macd_line)
+        histogram = [None] * len(macd_line)
+    else:
+        signal_full = ema_series(valid_macd, signal_period)
+        padding = len(macd_line) - len(signal_full)
+        signal_series = [None] * padding + signal_full
+        histogram = [m - s if m is not None and s is not None else None 
+                     for m, s in zip(macd_line, signal_series)]
+
+    return {
+        'macd': macd_line[-1],
+        'signal': signal_series[-1],
+        'histogram': histogram[-1],
+        'macd_series': macd_line,
+        'signal_series': signal_series,
+        'hist_series': histogram
+    }
+
+# ===== ATR (Average True Range) =====
 def calculate_atr(candles, period=14):
-    # candles: [[ts, open, close, high, low, vol], ...]
-    if not candles or len(candles) < period + 1:
+    """candles: لیست از دیکشنری با کلیدهای o, h, l, c"""
+    if len(candles) < period + 1:
         return None
-    trs = []
-    prev_close = candles[0][2]
-    for c in candles:
-        high = c[3]; low = c[4]; close = c[2]
+    
+    tr_list = []
+    for i in range(1, len(candles)):
+        high = candles[i]['h']
+        low = candles[i]['l']
+        prev_close = candles[i-1]['c']
         tr = max(
             high - low,
             abs(high - prev_close),
             abs(low - prev_close)
         )
-        trs.append(tr)
-        prev_close = close
-    first_atr = sum(trs[:period]) / period
-    atr_val = first_atr
-    for tr in trs[period:]:
-        atr_val = (atr_val * (period - 1) + tr) / period
-    return atr_val
+        tr_list.append(tr)
+    
+    if len(tr_list) < period:
+        return None
+    
+    atr = sum(tr_list[:period]) / period
+    for tr in tr_list[period:]:
+        atr = (atr * (period - 1) + tr) / period
+    
+    return round(atr, 6)
 
-# ===== قدرت کندل =====
+# ===== Body Strength =====
 def body_strength(candle):
-    # candle: [ts, open, close, high, low, vol] با ترتیب استفاده‌شده در پروژه
-    if not candle or len(candle) < 5:
-        return 0.0
-    open_price, close, high, low = candle[1], candle[2], candle[3], candle[4]
-    body = abs(close - open_price)
-    total = high - low
-    return body / total if total != 0 else 0.0
-
-# ===== Helpers for rules (حفظ و کمی بهبود) =====
-def is_near(a, b, pct=0.003):
-    if a is None or b is None:
-        return False
-    return abs(a - b) / b <= pct
-
-def hhhl_lhll_structure(candles, count=4, direction='LONG'):
-    # Simple structure check on highs/lows over last `count` candles
-    if not candles or len(candles) < count:
-        return False
-    highs = [c[3] for c in candles[-count:]]
-    lows  = [c[4] for c in candles[-count:]]
-    if direction == 'LONG':
-        return all(highs[i] >= highs[i - 1] for i in range(1, len(highs))) and \
-               all(lows[i]  >= lows[i - 1]  for i in range(1, len(lows)))
+    """candle: دیکشنری با o, c, h, l یا لیست [ts, o, c, h, l, v]"""
+    if isinstance(candle, list):
+        open_p, close_p, high, low = candle[1], candle[2], candle[3], candle[4]
     else:
-        return all(highs[i] <= highs[i - 1] for i in range(1, len(highs))) and \
-               all(lows[i]  <= lows[i - 1]  for i in range(1, len(lows)))
+        open_p, close_p, high, low = candle['o'], candle['c'], candle['h'], candle['l']
+    
+    body = abs(close_p - open_p)
+    total_range = high - low if high > low else 0.000001
+    return body / total_range
 
+# ===== Swing High/Low =====
 def swing_levels(candles, lookback=10):
-    if not candles or len(candles) < lookback:
+    """بازگرداندن آخرین Swing High و Swing Low در lookback کندل"""
+    if len(candles) < lookback:
         return None, None
-    highs = [c[3] for c in candles[-lookback:]]
-    lows  = [c[4] for c in candles[-lookback:]]
-    swing_high = max(highs)
-    swing_low  = min(lows)
+    
+    recent = candles[-lookback:]
+    highs = [c['h'] for c in recent[:-1]]  # بدون آخرین کندل
+    lows = [c['l'] for c in recent[:-1]]
+    
+    swing_high = max(highs) if highs else None
+    swing_low = min(lows) if lows else None
+    
     return swing_high, swing_low
 
-def broke_level(price, level, direction):
+# ===== چک نزدیکی قیمت به سطح =====
+def is_near(price, level, threshold=0.003):
     if price is None or level is None:
         return False
-    return (direction == 'LONG' and price > level) or (direction == 'SHORT' and price < level)
+    return abs(price - level) / level <= threshold
 
+# ===== ساختار HH/HL یا LH/LL =====
+def hhhl_lhll_structure(candles, count=5, direction='LONG'):
+    if len(candles) < count:
+        return False
+    recent = candles[-count:]
+    if direction == 'LONG':
+        return all(recent[i]['high'] > recent[i-1]['high'] and recent[i]['low'] > recent[i-1]['low'] for i in range(1, count))
+    else:  # SHORT
+        return all(recent[i]['high'] < recent[i-1]['high'] and recent[i]['low'] < recent[i-1]['low'] for i in range(1, count))
+
+# ===== شکست سطح =====
+def broke_level(current_price, level, direction):
+    if current_price is None or level is None:
+        return False
+    return (direction == 'LONG' and current_price > level) or (direction == 'SHORT' and current_price < level)
+
+# ===== شمارش RSI بالای/زیر 50 =====
 def rsi_count_ok(all_closes, direction, required):
     tfs = ['5m','15m','30m','1h','4h']
     count = 0
     values = {}
     for tf in tfs:
-        if tf in all_closes:
-            rsi = calculate_rsi(all_closes[tf],14)
-            if rsi is not None:
-                values[tf] = rsi
-                if (direction=='LONG' and rsi > 50) or (direction=='SHORT' and rsi < 50):
+        if tf in all_closes and len(all_closes[tf]) >= 15:
+            r = calculate_rsi(all_closes[tf])
+            if r is not None:
+                values[tf] = round(r, 2)
+                if (direction == 'LONG' and r > 50) or (direction == 'SHORT' and r < 50):
                     count += 1
     return count >= required, count, values
 
+# ===== شمارش MACD همسو =====
 def macd_count_ok(all_closes, direction, required):
     tfs = ['5m','15m','30m','1h','4h']
     count = 0
     values = {}
     for tf in tfs:
-        if tf in all_closes:
+        if tf in all_closes and len(all_closes[tf]) >= 35:
             macd = calculate_macd(all_closes[tf])
-            m, s, h = macd['macd'], macd['signal'], macd['histogram']
-            if m is not None and s is not None and h is not None:
-                values[tf] = (m, s, h)
-                ok = (direction=='LONG' and m>0 and h>0) or (direction=='SHORT' and m<0 and h<0)
-                if ok: count += 1
+            m, h = macd['macd'], macd['histogram']
+            if m is not None and h is not None:
+                values[tf] = (round(m, 6), round(h, 6))
+                ok = (direction == 'LONG' and m > 0 and h > 0) or (direction == 'SHORT' and m < 0 and h < 0)
+                if ok:
+                    count += 1
     return count >= required, count, values
 
-# ===== واگرایی پیشرفته (pivot-based ساده و سازگار) =====
+# ===== واگرایی ساده (بهبودیافته) =====
 def no_divergence(candles, closes, tf_list=('1h','4h')):
-    # جایگزین قبلی: اگر واگرایی آشکار نباشد → True
     for tf in tf_list:
-        if tf in closes and len(closes[tf]) >= 40:
+        if tf in closes and len(closes[tf]) >= 30:
             prices = closes[tf]
             macd_obj = calculate_macd(prices)
-            osc = macd_obj['histogram']
-            if osc is None:
+            hist = macd_obj['histogram']
+            if hist is None:
                 continue
-            # پنجره بررسی
+            # چک ساده: اگر قیمت بالا بره ولی هیستوگرام پایین بیاد → واگرایی
             lookback = 20
-            p_slice = prices[-lookback:]
-            # چون هیستوگرام لحظه‌ای است، برای ارزیابی ساده از قیمت و تغییر RSI استفاده می‌کنیم
-            rsi1 = calculate_rsi(prices[-(lookback+1):-1], 14)
-            rsi2 = calculate_rsi(prices[-lookback:], 14)
-            if rsi1 is None or rsi2 is None:
+            if len(prices) < lookback:
                 continue
-            # اگر جهت قیمت و بهبود RSI متناقض باشند، واگرایی محتمل است → برگرد False
-            price_up = p_slice[-1] > p_slice[0]
-            rsi_improve = rsi2 > rsi1
-            if (price_up and not rsi_improve) or (not price_up and rsi_improve):
+            price_change = prices[-1] - prices[-lookback]
+            hist_change = macd_obj['hist_series'][-1] - macd_obj['hist_series'][-lookback] if macd_obj['hist_series'][-lookback] is not None else 0
+            if (price_change > 0 and hist_change < 0) or (price_change < 0 and hist_change > 0):
                 return False
     return True
-
-# یادداشت: برای دقت بالاتر واگرایی، بهتر است سری کامل MACD/RSI استفاده شود.
