@@ -49,10 +49,17 @@ RISK_LEVELS = [
 ]
 
 SYMBOLS = [
-    'XAUT-USDT', 'XAGT-USDT',  # طلا و نقره
+    'XAUT-USDT', 'XAGT-USDT',
     'BTC-USDT', 'ETH-USDT', 'BNB-USDT', 'SOL-USDT', 'XRP-USDT',
     'ADA-USDT', 'DOGE-USDT', 'DOT-USDT', 'POL-USDT', 'LTC-USDT',
     'TRX-USDT', 'AVAX-USDT', 'ATOM-USDT', 'XLM-USDT', 'NEAR-USDT',
     'APT-USDT', 'ARB-USDT', 'OP-USDT', 'SUI-USDT', 'FIL-USDT'
 ]
 
+# پارامترهای مدیریت ریسک دینامیک
+RISK_PARAMS = {
+    'atr_multiplier': 1.2,   # فاصله استاپ از ورود بر اساس ATR
+    'rr_target': 2.0,        # نسبت هدف به ریسک
+    'swing_lookback': 10,    # نگاه به 10 کندل اخیر برای Swing
+    'rr_fallback': 2.0       # اگر ATR نباشد، RR بر اساس Swing
+}
