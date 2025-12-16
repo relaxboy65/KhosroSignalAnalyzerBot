@@ -1,70 +1,66 @@
-import aiohttp
-import asyncio
 import requests
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo   # پایتون 3.9+
 
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SYMBOLS, RISK_LEVELS, RISK_PARAMS
+from data_fetcher import fetch_all_timeframes
 from indicators import (
     calculate_rsi, calculate_ema, calculate_macd, body_strength,
     swing_levels, calculate_atr
 )
 from rules import check_rules_for_level
 
-KUCOIN_URL = "https://api.kucoin.com/api/v1/market/candles"
+# ========== ارسال سیگنال ==========
+def send_signal(symbol, analysis_data, check_result, direction):
+    clean_symbol = symbol.replace('-USDT','')
+    dir_emoji = '🟢' if direction=='LONG' else '🔴'
+    risk_symbol = '🦁' if check_result['risk_name']=='ریسک کم' else '🐺' if check_result['risk_name']=='ریسک میانی' else '🐒'
 
-intervals = {
-    "5m": "5min",
-    "15m": "15min",
-    "30m": "30min",
-    "1h": "1hour",
-    "4h": "4hour"
-}
+    last = analysis_data['last_close']
+    atr_val = calculate_atr(analysis_data['data']['15m'], period=14)
 
-# ========== دریافت داده برای یک نماد ==========
-async def fetch_all_timeframes(session, symbol, days=7):  # بازه را می‌توان بیشتر کرد
+    if atr_val:
+        stop = last - RISK_PARAMS['atr_multiplier']*atr_val if direction=='LONG' else last + RISK_PARAMS['atr_multiplier']*atr_val
+        target = last + RISK_PARAMS['rr_target']*(last-stop) if direction=='LONG' else last - RISK_PARAMS['rr_target']*(stop-last)
+    else:
+        sh, sl = swing_levels(analysis_data['data']['5m'])
+        stop = sl if direction=='LONG' else sh
+        target = last + RISK_PARAMS['rr_fallback']*(last-stop) if direction=='LONG' else last - RISK_PARAMS['rr_fallback']*(stop-last)
+
+    # زمان سرور و تهران
+    server_time = datetime.now()
+    tehran_time = datetime.now(ZoneInfo("Asia/Tehran"))
+
+    msg = (
+        f"{dir_emoji} {risk_symbol} {check_result['risk_name']} | {'لانگ' if direction=='LONG' else 'شورت'}\n"
+        f"نماد: {clean_symbol}\n"
+        f"قوانین گذرانده: {check_result['passed_count']}/9\n"
+        f"دلایل: {', '.join(check_result['reasons'])}\n"
+        f"ورود:\n{last:.4f}\n"
+        f"استاپ:\n{stop:.4f}\n"
+        f"تارگت:\n{target:.4f}\n"
+        f"⏰ زمان سرور: {server_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        f"⏰ زمان تهران: {tehran_time.strftime('%Y-%m-%d %H:%M:%S')}"
+    )
+
+    url=f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload={"chat_id":TELEGRAM_CHAT_ID,"text":msg}
     try:
-        end_time = int(datetime.utcnow().timestamp())
-        start_time = end_time - days*24*3600
+        r = requests.post(url,json=payload,timeout=15)
+        if r.status_code == 200:
+            print(f"✅ سیگنال {check_result['risk_name']} برای {symbol} ارسال شد")
+        else:
+            print(f"⚠️ ارسال تلگرام ناکام: {r.status_code} {r.text}")
+    except Exception as e:
+        print(f"❌ خطا در ارسال سیگنال: {e}")
 
-        tasks = []
-        for tf, api_tf in intervals.items():
-            params = {"symbol": symbol, "type": api_tf,
-                      "startAt": start_time, "endAt": end_time}
-            tasks.append(session.get(KUCOIN_URL, params=params, timeout=20))
-
-        responses = await asyncio.gather(*tasks)
-        result = {}
-        for (tf, resp) in zip(intervals.keys(), responses):
-            if resp.status == 200:
-                data = await resp.json()
-                candles = data.get("data", [])
-                # شرط تعداد کندل‌ها برای تایم‌فریم‌های مختلف
-                if tf == "4h":
-                    min_required = 10   # کافیست ۱۰ کندل داشته باشیم
-                else:
-                    min_required = 50
-                if candles and len(candles) >= min_required:
-                    parsed = [
-                        {
-                            't': int(c[0]),
-                            'o': float(c[1]),
-                            'c': float(c[2]),
-                            'h': float(c[3]),
-                            'l': float(c[4]),
-                            'v': float(c[5])
-                        }
-                        for c in candles
-                    ]
-                    result[tf] = parsed
-        return symbol, result if result else None
-    except Exception:
-        return symbol, None
-def process_symbol(symbol, data):
+# ========== پردازش نماد ==========
+def process_symbol(symbol):
+    data = fetch_all_timeframes(symbol)
     if not data:
         print(f"❌ دریافت داده ناموفق برای {symbol}")
-        return None
+        return
 
     closes = {tf: [c['c'] for c in data[tf]] for tf in data}
     analysis = {'last_close': closes['5m'][-1], 'closes': closes, 'data': data}
@@ -126,38 +122,23 @@ def process_symbol(symbol, data):
     if not any_signal:
         print("📭 هیچ سیگنال معتبری یافت نشد")
 
-    return True
-
-
 # ========== تابع اصلی ==========
-async def main_async():
-    start_perf = time.perf_counter()
+def main():
     server_start = datetime.now()
     tehran_start = datetime.now(ZoneInfo("Asia/Tehran"))
 
     print("="*80)
-    print("🚀 شروع تحلیل و سیگنال‌دهی (async)")
+    print("🚀 شروع تحلیل و سیگنال‌دهی")
     print(f"⏰ زمان شروع (سرور): {server_start.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"⏰ زمان شروع (تهران): {tehran_start.strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*80)
 
-    ok_symbols, fail_symbols = [], []
-
-    async with aiohttp.ClientSession() as session:
-        tasks = [fetch_all_timeframes(session, sym) for sym in SYMBOLS]
-        results = await asyncio.gather(*tasks)
-
-    # پردازش نتایج
-    for i, (sym, data) in enumerate(results, 1):
+    for i, sym in enumerate(SYMBOLS,1):
         print(f"\n[{i}/{len(SYMBOLS)}] پردازش نماد {sym}")
-        if data:
-            ok_symbols.append(sym)
-            process_symbol(sym, data)
-        else:
-            fail_symbols.append(sym)
-            print(f"❌ داده ناقص یا خطا برای {sym}")
+        process_symbol(sym)
+        if i < len(SYMBOLS):
+            time.sleep(1)   # فاصله بین پردازش هر ارز
 
-    duration = time.perf_counter() - start_perf
     server_end = datetime.now()
     tehran_end = datetime.now(ZoneInfo("Asia/Tehran"))
 
@@ -166,30 +147,9 @@ async def main_async():
     print(f"⏰ پایان (تهران): {tehran_end.strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*80)
 
-    # پیام جدید گزارش کلی
-    report_msg = (
-        "📊 گزارش اجرای ربات\n"
-        f"✅ ارزهای کامل: {', '.join(ok_symbols) if ok_symbols else 'هیچکدام'}\n"
-        f"❌ ارزهای ناقص: {', '.join(fail_symbols) if fail_symbols else 'هیچکدام'}\n"
-        f"⏱ مدت اجرا: {duration:.2f} ثانیه\n"
-        f"⏰ پایان (سرور): {server_end.strftime('%Y-%m-%d %H:%M:%S')}\n"
-        f"⏰ پایان (تهران): {tehran_end.strftime('%Y-%m-%d %H:%M:%S')}"
-    )
-
-    url=f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload={"chat_id":TELEGRAM_CHAT_ID,"text":report_msg}
-    try:
-        r = requests.post(url,json=payload,timeout=15)
-        if r.status_code == 200:
-            print("✅ گزارش کلی به تلگرام ارسال شد")
-        else:
-            print(f"⚠️ ارسال گزارش کلی ناکام: {r.status_code} {r.text}")
-    except Exception as e:
-        print(f"❌ خطا در ارسال گزارش کلی: {e}")
-
 # ========== اجرا ==========
 if __name__=="__main__":
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print("⚠️ تنظیمات تلگرام را بررسی کنید!")
     else:
-        asyncio.run(main_async())
+        main()
