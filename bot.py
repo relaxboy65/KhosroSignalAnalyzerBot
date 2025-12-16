@@ -23,43 +23,34 @@ intervals = {
 }
 
 # ========== دریافت داده برای یک نماد ==========
-async def fetch_all_timeframes(session, symbol, days=7):
-    try:
-        end_time = int(datetime.utcnow().timestamp())
-        result = {}
+# برای هر تایم‌فریم بازه‌ی مناسب تعیین کنید
+TF_DAYS = {
+    "5m": 7,
+    "15m": 7,
+    "30m": 7,
+    "1h": 14,   # افزایش بازه برای داشتن ≥200 کندل
+    "4h": 40
+}
 
-        for tf, api_tf in intervals.items():
-            # برای تایم‌فریم 4h بازه را 40 روز می‌گیریم
-            if tf == "4h":
-                start_time = end_time - 40*24*3600
-                min_required = 10   # کافیست ۱۰ کندل داشته باشیم
-            else:
-                start_time = end_time - days*24*3600
-                min_required = 50
+async def fetch_all_timeframes(session, symbol):
+    end_time = int(datetime.utcnow().timestamp())
+    result = {}
+    for tf, api_tf in intervals.items():
+        start_time = end_time - TF_DAYS[tf]*24*3600
+        min_required = 50 if tf != "4h" else 10
+        params = {"symbol": symbol, "type": api_tf, "startAt": start_time, "endAt": end_time}
+        async with session.get(KUCOIN_URL, params=params, timeout=20) as resp:
+            await asyncio.sleep(0.5)
+            if resp.status == 200:
+                data = await resp.json()
+                candles = data.get("data", [])
+                if candles and len(candles) >= min_required:
+                    result[tf] = [{
+                        't': int(c[0]), 'o': float(c[1]), 'c': float(c[2]),
+                        'h': float(c[3]), 'l': float(c[4]), 'v': float(c[5])
+                    } for c in candles]
+    return symbol, result if result else None
 
-            params = {"symbol": symbol, "type": api_tf,
-                      "startAt": start_time, "endAt": end_time}
-            async with session.get(KUCOIN_URL, params=params, timeout=20) as resp:
-                await asyncio.sleep(0.5)  # تاخیر کوچک برای پایداری
-                if resp.status == 200:
-                    data = await resp.json()
-                    candles = data.get("data", [])
-                    if candles and len(candles) >= min_required:
-                        parsed = [
-                            {
-                                't': int(c[0]),
-                                'o': float(c[1]),
-                                'c': float(c[2]),
-                                'h': float(c[3]),
-                                'l': float(c[4]),
-                                'v': float(c[5])
-                            }
-                            for c in candles
-                        ]
-                        result[tf] = parsed
-        return symbol, result if result else None
-    except Exception:
-        return symbol, None
 
 
 # ========== ارسال سیگنال ==========
