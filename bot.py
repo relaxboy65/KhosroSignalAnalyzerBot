@@ -76,21 +76,23 @@ async def fetch_all_timeframes(session, symbol):
             data[tf] = candles
     return symbol, data if data else None
 
-# ========== ارسال پیام به تلگرام (async) ==========
-async def send_to_telegram(session, text):
+# ========== ارسال پیام به تلگرام (async) — فیکس خطای Session is closed ==========
+async def send_to_telegram(text):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"}
-    try:
-        async with session.post(url, json=payload, timeout=15) as resp:
-            if resp.status == 200:
-                logger.info("✅ پیام به تلگرام ارسال شد")
-            else:
-                logger.warning(f"⚠️ خطا در ارسال تلگرام: {resp.status}")
-    except Exception as e:
-        logger.error(f"❌ خطا در ارسال تلگرام: {e}")
+    async with aiohttp.ClientSession() as temp_session:
+        try:
+            async with temp_session.post(url, json=payload, timeout=15) as resp:
+                if resp.status == 200:
+                    logger.info("✅ پیام به تلگرام ارسال شد")
+                else:
+                    txt = await resp.text()
+                    logger.warning(f"⚠️ خطا در ارسال تلگرام: {resp.status} {txt}")
+        except Exception as e:
+            logger.error(f"❌ خطا در ارسال به تلگرام: {e}")
 
 # ========== ارسال سیگنال ==========
-async def send_signal(session, symbol, analysis_data, check_result, direction):
+async def send_signal(symbol, analysis_data, check_result, direction):
     clean_symbol = symbol.replace('-USDT', '')
     dir_emoji = '🟢' if direction == 'LONG' else '🔴'
     risk_symbol = '🦁' if 'کم' in check_result['risk_name'] else '🐺' if 'میانی' in check_result['risk_name'] else '🐒'
@@ -127,7 +129,7 @@ async def send_signal(session, symbol, analysis_data, check_result, direction):
         f"⏰ {tehran_time.strftime('%Y-%m-%d %H:%M:%S')}"
     )
 
-    await send_to_telegram(session, msg)
+    await send_to_telegram(msg)
 
 # ========== پردازش یک نماد با لاگ کامل ==========
 def process_symbol(symbol, data, session, index, total):
@@ -226,26 +228,24 @@ async def main_async():
         for idx, (sym, data) in enumerate(results, 1):
             process_symbol(sym, data, session, idx, len(SYMBOLS))
 
-    duration = time.perf_counter() - start_time
-    server_end = datetime.now()
-    tehran_end = datetime.now(ZoneInfo("Asia/Tehran"))
+        # گزارش کلی به تلگرام — داخل async with
+        duration = time.perf_counter() - start_time
+        server_end = datetime.now()
+        tehran_end = datetime.now(ZoneInfo("Asia/Tehran"))
+
+        report = (
+            "📊 گزارش اجرای ربات\n\n"
+            f"تعداد ارزهای پردازش‌شده: {len([r for r in results if r[1]])}\n"
+            f"مدت اجرا: {duration:.2f} ثانیه\n"
+            f"پایان (تهران): {tehran_end.strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+        await send_to_telegram(report)
 
     logger.info("\n✅ پردازش کامل شد")
     logger.info(f"⏰ سرور: {server_end.strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info(f"⏰ تهران: {tehran_end.strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info(f"⏱ مدت اجرا: {duration:.2f} ثانیه")
     logger.info("=" * 80)
-
-    # گزارش کلی به تلگرام
-    await send_to_telegram(session, report)
-    # گزارش کلی به تلگرام — داخل async with بذار
-    report = (
-        "📊 گزارش اجرای ربات\n\n"
-        f"تعداد ارزهای پردازش‌شده: {len([r for r in results if r[1]])}\n"
-        f"مدت اجرا: {duration:.2f} ثانیه\n"
-        f"پایان (تهران): {tehran_end.strftime('%Y-%m-%d %H:%M:%S')}"
-    )
-    await send_to_telegram(session, report)  # داخل async with
 
 if __name__ == "__main__":
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
