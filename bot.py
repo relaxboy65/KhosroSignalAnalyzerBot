@@ -29,9 +29,9 @@ async def fetch_all_timeframes(session, symbol, days=7):
         result = {}
 
         for tf, api_tf in intervals.items():
-            # برای تایم‌فریم 4h بازه را 30 روز می‌گیریم
+            # برای تایم‌فریم 4h بازه را 40 روز می‌گیریم
             if tf == "4h":
-                start_time = end_time - 30*24*3600
+                start_time = end_time - 40*24*3600
                 min_required = 10   # کافیست ۱۰ کندل داشته باشیم
             else:
                 start_time = end_time - days*24*3600
@@ -60,6 +60,7 @@ async def fetch_all_timeframes(session, symbol, days=7):
         return symbol, result if result else None
     except Exception:
         return symbol, None
+
 
 # ========== ارسال سیگنال ==========
 def send_signal(symbol, analysis_data, check_result, direction):
