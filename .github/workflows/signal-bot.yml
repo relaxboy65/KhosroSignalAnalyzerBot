@@ -2,8 +2,9 @@ name: KhosroSignalAnalyzerBot
 
 on:
   schedule:
+    # اجرا در دقیقه 30 از ساعت‌های 9 تا 22 (یعنی 9:30 تا 22:30)
     - cron: "30 9-22 * * *"
-  workflow_dispatch:
+  workflow_dispatch:         # امکان اجرای دستی هم داشته باشد
 
 jobs:
   run:
