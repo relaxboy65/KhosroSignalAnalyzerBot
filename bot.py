@@ -40,7 +40,12 @@ async def fetch_all_timeframes(session, symbol, days=3):
             if resp.status == 200:
                 data = await resp.json()
                 candles = data.get("data", [])
-                if candles and len(candles) >= 50:
+                # شرط تعداد کندل‌ها برای تایم‌فریم‌های مختلف
+                if tf == "4h":
+                    min_required = 10
+                else:
+                    min_required = 50
+                if candles and len(candles) >= min_required:
                     parsed = [
                         {
                             't': int(c[0]),
@@ -56,52 +61,6 @@ async def fetch_all_timeframes(session, symbol, days=3):
         return symbol, result if result else None
     except Exception:
         return symbol, None
-
-# ========== ارسال سیگنال ==========
-def send_signal(symbol, analysis_data, check_result, direction):
-    clean_symbol = symbol.replace('-USDT','')
-    dir_emoji = '🟢' if direction=='LONG' else '🔴'
-    risk_symbol = '🦁' if check_result['risk_name']=='ریسک کم' else '🐺' if check_result['risk_name']=='ریسک میانی' else '🐒'
-
-    last = analysis_data['last_close']
-    atr_val = calculate_atr(analysis_data['data']['15m'], period=14)
-
-    if atr_val:
-        stop = last - RISK_PARAMS['atr_multiplier']*atr_val if direction=='LONG' else last + RISK_PARAMS['atr_multiplier']*atr_val
-        target = last + RISK_PARAMS['rr_target']*(last-stop) if direction=='LONG' else last - RISK_PARAMS['rr_target']*(stop-last)
-    else:
-        sh, sl = swing_levels(analysis_data['data']['5m'])
-        stop = sl if direction=='LONG' else sh
-        target = last + RISK_PARAMS['rr_fallback']*(last-stop) if direction=='LONG' else last - RISK_PARAMS['rr_fallback']*(stop-last)
-
-    # زمان سرور و تهران
-    server_time = datetime.now()
-    tehran_time = datetime.now(ZoneInfo("Asia/Tehran"))
-
-    msg = (
-        f"{dir_emoji} {risk_symbol} {check_result['risk_name']} | {'لانگ' if direction=='LONG' else 'شورت'}\n"
-        f"نماد: {clean_symbol}\n"
-        f"قوانین گذرانده: {check_result['passed_count']}/9\n"
-        f"دلایل: {', '.join(check_result['reasons'])}\n"
-        f"ورود:\n{last:.4f}\n"
-        f"استاپ:\n{stop:.4f}\n"
-        f"تارگت:\n{target:.4f}\n"
-        f"⏰ زمان سرور: {server_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-        f"⏰ زمان تهران: {tehran_time.strftime('%Y-%m-%d %H:%M:%S')}"
-    )
-
-    url=f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload={"chat_id":TELEGRAM_CHAT_ID,"text":msg}
-    try:
-        r = requests.post(url,json=payload,timeout=15)
-        if r.status_code == 200:
-            print(f"✅ سیگنال {check_result['risk_name']} برای {symbol} ارسال شد")
-        else:
-            print(f"⚠️ ارسال تلگرام ناکام: {r.status_code} {r.text}")
-    except Exception as e:
-        print(f"❌ خطا در ارسال سیگنال: {e}")
-
-# ========== پردازش نماد ==========
 def process_symbol(symbol, data):
     if not data:
         print(f"❌ دریافت داده ناموفق برای {symbol}")
@@ -168,6 +127,8 @@ def process_symbol(symbol, data):
         print("📭 هیچ سیگنال معتبری یافت نشد")
 
     return True
+
+
 # ========== تابع اصلی ==========
 async def main_async():
     start_perf = time.perf_counter()
