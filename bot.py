@@ -35,7 +35,7 @@ intervals = {
     "4h": "4hour"
 }
 
-# ========== دریافت داده ==========
+# ========== دریافت داده برای یک تایم‌فریم ==========
 async def fetch_timeframe(session, symbol, tf, days):
     api_tf = intervals[tf]
     end_time = int(datetime.utcnow().timestamp())
@@ -54,11 +54,18 @@ async def fetch_timeframe(session, symbol, tf, days):
                     for c in candles_raw
                 ]
                 return tf, list(reversed(parsed))
-            return tf, []
+            elif resp.status == 429:
+                logger.warning(f"Rate limit برای {symbol} {tf} — ۱۰ ثانیه صبر...")
+                await asyncio.sleep(10)
+                return await fetch_timeframe(session, symbol, tf, days)
+            else:
+                logger.warning(f"خطای HTTP {resp.status} برای {symbol} {tf}")
+                return tf, []
     except Exception as e:
-        logger.error(f"خطا در {symbol} {tf}: {e}")
+        logger.error(f"خطا در دریافت {symbol} {tf}: {e}")
         return tf, []
 
+# ========== دریافت همه تایم‌فریم‌ها ==========
 async def fetch_all_timeframes(session, symbol):
     settings = {"5m": 7, "15m": 7, "30m": 14, "1h": 30, "4h": 60}
     tasks = [fetch_timeframe(session, symbol, tf, days) for tf, days in settings.items()]
@@ -69,6 +76,19 @@ async def fetch_all_timeframes(session, symbol):
             data[tf] = candles
     return symbol, data if data else None
 
+# ========== ارسال پیام به تلگرام (async) ==========
+async def send_to_telegram(session, text):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"}
+    try:
+        async with session.post(url, json=payload, timeout=15) as resp:
+            if resp.status == 200:
+                logger.info("✅ پیام به تلگرام ارسال شد")
+            else:
+                logger.warning(f"⚠️ خطا در ارسال تلگرام: {resp.status}")
+    except Exception as e:
+        logger.error(f"❌ خطا در ارسال تلگرام: {e}")
+
 # ========== ارسال سیگنال ==========
 async def send_signal(session, symbol, analysis_data, check_result, direction):
     clean_symbol = symbol.replace('-USDT', '')
@@ -77,18 +97,24 @@ async def send_signal(session, symbol, analysis_data, check_result, direction):
 
     last = analysis_data['last_close']
 
-    # استاپ و تارگت
-    atr_val = calculate_atr(analysis_data['data'].get('15m', []), period=14)
+    # استاپ و تارگت دینامیک
+    atr_val = calculate_atr(analysis_data['data'].get('15m', []), period=14) if '15m' in analysis_data['data'] else None
     if atr_val and atr_val > 0:
         mult = RISK_PARAMS.get('atr_multiplier', 1.2)
         rr = RISK_PARAMS.get('rr_target', 2.0)
-        stop = last - mult * atr_val if direction == 'LONG' else last + mult * atr_val
-        target = last + rr * (last - stop) if direction == 'LONG' else last - rr * (stop - last)
+        if direction == 'LONG':
+            stop = last - mult * atr_val
+            target = last + rr * (last - stop)
+        else:
+            stop = last + mult * atr_val
+            target = last - rr * (stop - last)
     else:
         sh, sl = swing_levels(analysis_data['data'].get('5m', []), lookback=10)
         level = sl if direction == 'LONG' else sh
         stop = level or (last * 0.985 if direction == 'LONG' else last * 1.015)
         target = last + RISK_PARAMS.get('rr_fallback', 2.0) * (last - stop) if direction == 'LONG' else last - RISK_PARAMS.get('rr_fallback', 2.0) * (stop - last)
+
+    tehran_time = datetime.now(ZoneInfo("Asia/Tehran"))
 
     msg = (
         f"{dir_emoji} {risk_symbol} <b>{check_result['risk_name']}</b> | {'لانگ' if direction=='LONG' else 'شورت'}\n\n"
@@ -98,31 +124,22 @@ async def send_signal(session, symbol, analysis_data, check_result, direction):
         f"ورود: <code>{last:.4f}</code>\n"
         f"استاپ: <code>{stop:.4f}</code>\n"
         f"تارگت: <code>{target:.4f}</code>\n\n"
-        f"⏰ {datetime.now(ZoneInfo('Asia/Tehran')).strftime('%Y-%m-%d %H:%M:%S')}"
+        f"⏰ {tehran_time.strftime('%Y-%m-%d %H:%M:%S')}"
     )
 
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": msg, "parse_mode": "HTML"}
-    try:
-        async with session.post(url, json=payload) as resp:
-            if resp.status == 200:
-                logger.info(f"✅ سیگنال {check_result['risk_name']} {direction} برای {symbol} ارسال شد")
-            else:
-                logger.warning(f"⚠️ خطا در ارسال سیگنال: {resp.status}")
-    except Exception as e:
-        logger.error(f"❌ خطا در ارسال سیگنال: {e}")
+    await send_to_telegram(session, msg)
 
-# ========== پردازش یک نماد با خروجی دقیق ==========
-def process_symbol(symbol, data, session):
+# ========== پردازش یک نماد با لاگ کامل ==========
+def process_symbol(symbol, data, session, index, total):
     if not data:
-        logger.info(f"\n[{symbol}] ❌ داده دریافت نشد")
+        logger.info(f"\n[{index}/{total}] پردازش نماد {symbol} — ❌ داده دریافت نشد")
         return
 
     closes = {tf: [c['c'] for c in data[tf]] for tf in data}
     last_close = closes['5m'][-1] if '5m' in closes else 0.0
 
-    logger.info(f"\n[{symbol}] پردازش نماد {symbol}")
-    logger.info("📊 گزارش کامل {symbol}:")
+    logger.info(f"\n[{index}/{total}] پردازش نماد {symbol}")
+    logger.info(f"📊 گزارش کامل {symbol}:")
     logger.info("-" * 60)
     logger.info(f"💰 قیمت فعلی: {last_close:.4f}")
 
@@ -139,21 +156,29 @@ def process_symbol(symbol, data, session):
             ema200_str = f"{ema200_val:.4f}" if ema200_val is not None else "N/A"
 
             logger.info(f"    • {tf}: EMA21={ema21_str}, EMA55={ema55_str}, EMA200={ema200_str}")
-            
+
     # RSI
     logger.info("\n📊 RSI:")
     for tf in ['5m', '15m', '30m', '1h', '4h']:
         if tf in closes:
             rsi_val = calculate_rsi(closes[tf], 14)
-            logger.info(f"  • {tf}: {rsi_val:.2f if rsi_val else 'N/A'}")
+            rsi_str = f"{rsi_val:.2f}" if rsi_val is not None else "N/A"
+            logger.info(f"  • {tf}: {rsi_str}")
 
     # MACD
     logger.info("\n🌀 MACD:")
     for tf in ['5m', '15m', '30m', '1h', '4h']:
         if tf in closes:
             macd_obj = calculate_macd(closes[tf])
-            m, s, h = macd_obj['macd'], macd_obj['signal'], macd_obj['histogram']
-            logger.info(f"  • {tf}: MACD={m:.6f if m else 'N/A'}, Signal={s:.6f if s else 'N/A'}, Hist={h:.6f if h else 'N/A'}")
+            m = macd_obj['macd']
+            s = macd_obj['signal']
+            h = macd_obj['histogram']
+
+            m_str = f"{m:.6f}" if m is not None else "N/A"
+            s_str = f"{s:.6f}" if s is not None else "N/A"
+            h_str = f"{h:.6f}" if h is not None else "N/A"
+
+            logger.info(f"  • {tf}: MACD={m_str}, Signal={s_str}, Hist={h_str}")
 
     # قدرت کندل 5m
     if '5m' in data:
@@ -198,11 +223,8 @@ async def main_async():
         tasks = [fetch_all_timeframes(session, sym) for sym in SYMBOLS]
         results = await asyncio.gather(*tasks)
 
-        idx = 1
-        for sym, data in results:
-            logger.info(f"\n[{idx}/{len(SYMBOLS)}] پردازش نماد {sym}")
-            process_symbol(sym, data, session)
-            idx += 1
+        for idx, (sym, data) in enumerate(results, 1):
+            process_symbol(sym, data, session, idx, len(SYMBOLS))
 
     duration = time.perf_counter() - start_time
     server_end = datetime.now()
@@ -213,6 +235,15 @@ async def main_async():
     logger.info(f"⏰ تهران: {tehran_end.strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info(f"⏱ مدت اجرا: {duration:.2f} ثانیه")
     logger.info("=" * 80)
+
+    # گزارش کلی به تلگرام
+    report = (
+        "📊 گزارش اجرای ربات\n\n"
+        f"تعداد ارزهای پردازش‌شده: {len([r for r in results if r[1]])}\n"
+        f"مدت اجرا: {duration:.2f} ثانیه\n"
+        f"پایان (تهران): {tehran_end.strftime('%Y-%m-%d %H:%M:%S')}"
+    )
+    await send_to_telegram(session, report)
 
 if __name__ == "__main__":
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
