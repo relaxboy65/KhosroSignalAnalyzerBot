@@ -144,7 +144,7 @@ def check_rules_for_level(analysis_data, risk_config, direction):
     if risk_key == 'LOW':
         decision = passed_count >= 7
     elif risk_key == 'MEDIUM':
-        decision = passed_count >= 7
+        decision = passed_count >= 6
     else:  # HIGH
         decision = passed_count >= 5   # تغییر اصلی برای ۵٪ آسان‌تر
 
