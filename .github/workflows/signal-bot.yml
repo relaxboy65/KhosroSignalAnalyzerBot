@@ -29,3 +29,9 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           python bot.py
+
+      - name: Upload log file
+        uses: actions/upload-artifact@v3
+        with:
+          name: bot-log
+          path: bot_log.txt
