@@ -14,18 +14,33 @@ from rules import check_rules_for_level
 
 KUCOIN_URL = "https://api.kucoin.com/api/v1/market/candles"
 
+intervals = {
+    "5m": "5min",
+    "15m": "15min",
+    "30m": "30min",
+    "1h": "1hour",
+    "4h": "4hour"
+}
+
 # ========== دریافت داده برای یک نماد ==========
-async def fetch_all_timeframes(session, symbol, interval="5min", days=3):
+async def fetch_all_timeframes(session, symbol, days=3):
     try:
         end_time = int(datetime.utcnow().timestamp())
         start_time = end_time - days*24*3600
-        params = {"symbol": symbol, "type": interval, "startAt": start_time, "endAt": end_time}
-        async with session.get(KUCOIN_URL, params=params, timeout=20) as resp:
+
+        tasks = []
+        for tf, api_tf in intervals.items():
+            params = {"symbol": symbol, "type": api_tf,
+                      "startAt": start_time, "endAt": end_time}
+            tasks.append(session.get(KUCOIN_URL, params=params, timeout=20))
+
+        responses = await asyncio.gather(*tasks)
+        result = {}
+        for (tf, resp) in zip(intervals.keys(), responses):
             if resp.status == 200:
                 data = await resp.json()
                 candles = data.get("data", [])
                 if candles and len(candles) >= 50:
-                    # 🔑 تبدیل به دیکشنری مثل نسخه‌ی سینک
                     parsed = [
                         {
                             't': int(c[0]),
@@ -37,11 +52,8 @@ async def fetch_all_timeframes(session, symbol, interval="5min", days=3):
                         }
                         for c in candles
                     ]
-                    return symbol, {"5m": parsed}
-                else:
-                    return symbol, None
-            else:
-                return symbol, None
+                    result[tf] = parsed
+        return symbol, result if result else None
     except Exception:
         return symbol, None
 
@@ -52,7 +64,7 @@ def send_signal(symbol, analysis_data, check_result, direction):
     risk_symbol = '🦁' if check_result['risk_name']=='ریسک کم' else '🐺' if check_result['risk_name']=='ریسک میانی' else '🐒'
 
     last = analysis_data['last_close']
-    atr_val = calculate_atr(analysis_data['data']['5m'], period=14)
+    atr_val = calculate_atr(analysis_data['data']['15m'], period=14)
 
     if atr_val:
         stop = last - RISK_PARAMS['atr_multiplier']*atr_val if direction=='LONG' else last + RISK_PARAMS['atr_multiplier']*atr_val
@@ -103,7 +115,7 @@ def process_symbol(symbol, data):
     print(f"💰 قیمت فعلی: {analysis['last_close']:.4f}")
 
     # EMA
-    for tf in ['5m']:
+    for tf in ['5m','15m','30m','1h','4h']:
         if tf in closes:
             ema21 = calculate_ema(closes[tf],21)
             ema55 = calculate_ema(closes[tf],55)
@@ -115,7 +127,7 @@ def process_symbol(symbol, data):
 
     # RSI
     print("\n📊 RSI:")
-    for tf in ['5m']:
+    for tf in ['5m','15m','30m','1h','4h']:
         if tf in closes:
             rsi_val = calculate_rsi(closes[tf],14)
             rsi_str = f"{rsi_val:.2f}" if rsi_val is not None else "N/A"
@@ -123,7 +135,7 @@ def process_symbol(symbol, data):
 
     # MACD
     print("\n🌀 MACD:")
-    for tf in ['5m']:
+    for tf in ['5m','15m','30m','1h','4h']:
         if tf in closes:
             macd_obj = calculate_macd(closes[tf])
             macd_str = f"{macd_obj['macd']:.6f}" if macd_obj['macd'] is not None else "N/A"
