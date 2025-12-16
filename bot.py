@@ -1,155 +1,76 @@
-import requests
+import aiohttp
+import asyncio
 import time
 from datetime import datetime
-from zoneinfo import ZoneInfo   # پایتون 3.9+
+from zoneinfo import ZoneInfo
 
-from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SYMBOLS, RISK_LEVELS, RISK_PARAMS
-from data_fetcher import fetch_all_timeframes
-from indicators import (
-    calculate_rsi, calculate_ema, calculate_macd, body_strength,
-    swing_levels, calculate_atr
-)
-from rules import check_rules_for_level
+from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SYMBOLS
 
-# ========== ارسال سیگنال ==========
-def send_signal(symbol, analysis_data, check_result, direction):
-    clean_symbol = symbol.replace('-USDT','')
-    dir_emoji = '🟢' if direction=='LONG' else '🔴'
-    risk_symbol = '🦁' if check_result['risk_name']=='ریسک کم' else '🐺' if check_result['risk_name']=='ریسک میانی' else '🐒'
+KUCOIN_URL = "https://api.kucoin.com/api/v1/market/candles"
 
-    last = analysis_data['last_close']
-    atr_val = calculate_atr(analysis_data['data']['15m'], period=14)
-
-    if atr_val:
-        stop = last - RISK_PARAMS['atr_multiplier']*atr_val if direction=='LONG' else last + RISK_PARAMS['atr_multiplier']*atr_val
-        target = last + RISK_PARAMS['rr_target']*(last-stop) if direction=='LONG' else last - RISK_PARAMS['rr_target']*(stop-last)
-    else:
-        sh, sl = swing_levels(analysis_data['data']['5m'])
-        stop = sl if direction=='LONG' else sh
-        target = last + RISK_PARAMS['rr_fallback']*(last-stop) if direction=='LONG' else last - RISK_PARAMS['rr_fallback']*(stop-last)
-
-    # زمان سرور و تهران
-    server_time = datetime.now()
-    tehran_time = datetime.now(ZoneInfo("Asia/Tehran"))
-
-    msg = (
-        f"{dir_emoji} {risk_symbol} {check_result['risk_name']} | {'لانگ' if direction=='LONG' else 'شورت'}\n"
-        f"نماد: {clean_symbol}\n"
-        f"قوانین گذرانده: {check_result['passed_count']}/9\n"
-        f"دلایل: {', '.join(check_result['reasons'])}\n"
-        f"ورود:\n{last:.4f}\n"
-        f"استاپ:\n{stop:.4f}\n"
-        f"تارگت:\n{target:.4f}\n"
-        f"⏰ زمان سرور: {server_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-        f"⏰ زمان تهران: {tehran_time.strftime('%Y-%m-%d %H:%M:%S')}"
-    )
-
-    url=f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload={"chat_id":TELEGRAM_CHAT_ID,"text":msg}
+# ========== دریافت داده برای یک نماد ==========
+async def fetch_symbol(session, symbol, interval="5min", days=3):
     try:
-        r = requests.post(url,json=payload,timeout=15)
-        if r.status_code == 200:
-            print(f"✅ سیگنال {check_result['risk_name']} برای {symbol} ارسال شد")
-        else:
-            print(f"⚠️ ارسال تلگرام ناکام: {r.status_code} {r.text}")
-    except Exception as e:
-        print(f"❌ خطا در ارسال سیگنال: {e}")
+        end_time = int(datetime.utcnow().timestamp())
+        start_time = end_time - days*24*3600
+        params = {"symbol": symbol, "type": interval, "startAt": start_time, "endAt": end_time}
+        async with session.get(KUCOIN_URL, params=params, timeout=20) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                candles = data.get("data", [])
+                if candles and len(candles) >= 50:
+                    return symbol, True
+                else:
+                    return symbol, False
+            else:
+                return symbol, False
+    except Exception:
+        return symbol, False
 
-# ========== پردازش نماد ==========
-def process_symbol(symbol):
-    data = fetch_all_timeframes(symbol)
-    if not data:
-        print(f"❌ دریافت داده ناموفق برای {symbol}")
-        return
+# ========== ارسال پیام تلگرام ==========
+async def send_telegram(text):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text}
+    async with aiohttp.ClientSession() as session:
+        await session.post(url, json=payload)
 
-    closes = {tf: [c['c'] for c in data[tf]] for tf in data}
-    analysis = {'last_close': closes['5m'][-1], 'closes': closes, 'data': data}
-
-    print(f"\n📊 گزارش کامل {symbol}:")
-    print("-"*60)
-    print(f"💰 قیمت فعلی: {analysis['last_close']:.4f}")
-
-    # EMA
-    for tf in ['5m','15m','30m','1h','4h']:
-        if tf in closes:
-            ema21 = calculate_ema(closes[tf],21)
-            ema55 = calculate_ema(closes[tf],55)
-            ema200 = calculate_ema(closes[tf],200) if len(closes[tf])>=200 else None
-            ema21_str = f"{ema21:.4f}" if ema21 is not None else "N/A"
-            ema55_str = f"{ema55:.4f}" if ema55 is not None else "N/A"
-            ema200_str = f"{ema200:.4f}" if ema200 is not None else "N/A"
-            print(f"  • {tf}: EMA21={ema21_str}, EMA55={ema55_str}, EMA200={ema200_str}")
-
-    # RSI
-    print("\n📊 RSI:")
-    for tf in ['5m','15m','30m','1h','4h']:
-        if tf in closes:
-            rsi_val = calculate_rsi(closes[tf],14)
-            rsi_str = f"{rsi_val:.2f}" if rsi_val is not None else "N/A"
-            print(f"  • {tf}: {rsi_str}")
-
-    # MACD
-    print("\n🌀 MACD:")
-    for tf in ['5m','15m','30m','1h','4h']:
-        if tf in closes:
-            macd_obj = calculate_macd(closes[tf])
-            macd_str = f"{macd_obj['macd']:.6f}" if macd_obj['macd'] is not None else "N/A"
-            signal_str = f"{macd_obj['signal']:.6f}" if macd_obj['signal'] is not None else "N/A"
-            hist_str = f"{macd_obj['histogram']:.6f}" if macd_obj['histogram'] is not None else "N/A"
-            print(f"  • {tf}: MACD={macd_str}, Signal={signal_str}, Hist={hist_str}")
-
-    # قدرت کندل
-    if '5m' in data:
-        strength_5m = body_strength(data['5m'][-1])
-        print(f"\n🕯️ قدرت کندل 5m: {strength_5m:.2f}")
-
-    print("-"*60)
-
-    # بررسی شرایط سیگنال
-    print("\n🔎 بررسی شرایط سیگنال...")
-    any_signal = False
-    for direction in ['LONG','SHORT']:
-        dir_text = "صعودی" if direction=='LONG' else "نزولی"
-        print(f"\n➡️ بررسی جهت {dir_text}:")
-        for risk in RISK_LEVELS:
-            res = check_rules_for_level(analysis, risk, direction)
-            print(f"   سطح {risk['name']} → قوانین گذرانده: {res['passed_count']}/9 | دلایل: {', '.join(res['reasons'])}")
-            if res['passed']:
-                any_signal = True
-                print(f"   ✅ تصمیم: سیگنال {risk['name']} {dir_text}")
-                send_signal(symbol, analysis, res, direction)
-
-    if not any_signal:
-        print("📭 هیچ سیگنال معتبری یافت نشد")
-
-# ========== تابع اصلی ==========
-def main():
+# ========== اجرای اصلی ==========
+async def main_async():
+    start = time.perf_counter()
     server_start = datetime.now()
     tehran_start = datetime.now(ZoneInfo("Asia/Tehran"))
 
-    print("="*80)
-    print("🚀 شروع تحلیل و سیگنال‌دهی")
-    print(f"⏰ زمان شروع (سرور): {server_start.strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"⏰ زمان شروع (تهران): {tehran_start.strftime('%Y-%m-%d %H:%M:%S')}")
-    print("="*80)
+    async with aiohttp.ClientSession() as session:
+        tasks = [fetch_symbol(session, sym) for sym in SYMBOLS]
+        results = await asyncio.gather(*tasks)
 
-    for i, sym in enumerate(SYMBOLS,1):
-        print(f"\n[{i}/{len(SYMBOLS)}] پردازش نماد {sym}")
-        process_symbol(sym)
-        if i < len(SYMBOLS):
-            time.sleep(10)   # فاصله بین پردازش هر ارز
+    ok = [sym for sym, status in results if status]
+    fail = [sym for sym, status in results if not status]
 
+    duration = time.perf_counter() - start
     server_end = datetime.now()
     tehran_end = datetime.now(ZoneInfo("Asia/Tehran"))
 
-    print("\n✅ پردازش کامل شد")
-    print(f"⏰ پایان (سرور): {server_end.strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"⏰ پایان (تهران): {tehran_end.strftime('%Y-%m-%d %H:%M:%S')}")
+    msg = (
+        "📊 گزارش اجرای ربات\n"
+        f"⏰ زمان شروع (سرور): {server_start.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        f"⏰ زمان شروع (تهران): {tehran_start.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        f"✅ ارزهای کامل: {', '.join(ok) if ok else 'هیچکدام'}\n"
+        f"❌ ارزهای ناقص: {', '.join(fail) if fail else 'هیچکدام'}\n"
+        f"⏱ مدت اجرا: {duration:.2f} ثانیه\n"
+        f"⏰ پایان (سرور): {server_end.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        f"⏰ پایان (تهران): {tehran_end.strftime('%Y-%m-%d %H:%M:%S')}"
+    )
+
+    print("="*80)
+    print(msg)
     print("="*80)
 
+    await send_telegram(msg)
+
 # ========== اجرا ==========
-if __name__=="__main__":
+if __name__ == "__main__":
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print("⚠️ تنظیمات تلگرام را بررسی کنید!")
     else:
-        main()
+        asyncio.run(main_async())
