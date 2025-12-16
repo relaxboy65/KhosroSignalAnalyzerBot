@@ -1,5 +1,6 @@
 import aiohttp
 import asyncio
+import requests
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo   # پایتون 3.9+
@@ -24,7 +25,12 @@ async def fetch_all_timeframes(session, symbol, interval="5min", days=3):
                 data = await resp.json()
                 candles = data.get("data", [])
                 if candles and len(candles) >= 50:
-                    return symbol, {"5m": candles}  # نمونه ساده برای تست
+                    # 🔑 تبدیل همه‌ی مقادیر به عدد مثل نسخه‌ی سینک
+                    parsed = [
+                        [int(c[0]), float(c[1]), float(c[2]), float(c[3]), float(c[4]), float(c[5])]
+                        for c in candles
+                    ]
+                    return symbol, {"5m": parsed}
                 else:
                     return symbol, None
             else:
@@ -82,7 +88,7 @@ def process_symbol(symbol, data):
         print(f"❌ دریافت داده ناموفق برای {symbol}")
         return None
 
-    closes = {tf: [float(c[2]) for c in data[tf]] for tf in data}  # فرض: ستون 2 قیمت بسته شدن
+    closes = {tf: [c[2] for c in data[tf]] for tf in data}  # ستون 2 قیمت بسته شدن
     analysis = {'last_close': closes['5m'][-1], 'closes': closes, 'data': data}
 
     print(f"\n📊 گزارش کامل {symbol}:")
