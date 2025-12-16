@@ -23,7 +23,7 @@ intervals = {
 }
 
 # ========== دریافت داده برای یک نماد ==========
-async def fetch_all_timeframes(session, symbol, days=3):
+async def fetch_all_timeframes(session, symbol, days=7):  # بازه را می‌توان بیشتر کرد
     try:
         end_time = int(datetime.utcnow().timestamp())
         start_time = end_time - days*24*3600
@@ -42,7 +42,7 @@ async def fetch_all_timeframes(session, symbol, days=3):
                 candles = data.get("data", [])
                 # شرط تعداد کندل‌ها برای تایم‌فریم‌های مختلف
                 if tf == "4h":
-                    min_required = 10
+                    min_required = 10   # کافیست ۱۰ کندل داشته باشیم
                 else:
                     min_required = 50
                 if candles and len(candles) >= min_required:
