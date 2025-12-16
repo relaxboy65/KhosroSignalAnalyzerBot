@@ -195,7 +195,7 @@ def check_rules_for_level(analysis_data, risk_config, direction):
     elif risk_key == 'MEDIUM':
         decision = passed_count >= 6
     else:
-        decision = passed_count >= 4  # کاهش برای دیدن فرصت‌های قیمت‌محور
+        decision = passed_count >= 5  # کاهش برای دیدن فرصت‌های قیمت‌محور
 
     return {
         'passed': decision,
