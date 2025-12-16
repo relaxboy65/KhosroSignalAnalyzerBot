@@ -237,13 +237,15 @@ async def main_async():
     logger.info("=" * 80)
 
     # گزارش کلی به تلگرام
+    await send_to_telegram(session, report)
+    # گزارش کلی به تلگرام — داخل async with بذار
     report = (
         "📊 گزارش اجرای ربات\n\n"
         f"تعداد ارزهای پردازش‌شده: {len([r for r in results if r[1]])}\n"
         f"مدت اجرا: {duration:.2f} ثانیه\n"
         f"پایان (تهران): {tehran_end.strftime('%Y-%m-%d %H:%M:%S')}"
     )
-    await send_to_telegram(session, report)
+    await send_to_telegram(session, report)  # داخل async with
 
 if __name__ == "__main__":
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
