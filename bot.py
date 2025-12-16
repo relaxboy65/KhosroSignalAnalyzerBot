@@ -2,6 +2,8 @@ import aiohttp
 import asyncio
 import requests
 import time
+import logging
+import sys
 from datetime import datetime
 from zoneinfo import ZoneInfo   # پایتون 3.9+
 
@@ -22,35 +24,63 @@ intervals = {
     "4h": "4hour"
 }
 
+# ========== تنظیمات لاگ ==========
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+
+file_handler = logging.FileHandler("bot_log.txt", encoding="utf-8")
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
+
+
 # ========== دریافت داده برای یک نماد ==========
-# برای هر تایم‌فریم بازه‌ی مناسب تعیین کنید
-TF_DAYS = {
-    "5m": 7,
-    "15m": 7,
-    "30m": 7,
-    "1h": 14,   # افزایش بازه برای داشتن ≥200 کندل
-    "4h": 40
-}
-
 async def fetch_all_timeframes(session, symbol):
-    end_time = int(datetime.utcnow().timestamp())
-    result = {}
-    for tf, api_tf in intervals.items():
-        start_time = end_time - TF_DAYS[tf]*24*3600
-        min_required = 50 if tf != "4h" else 10
-        params = {"symbol": symbol, "type": api_tf, "startAt": start_time, "endAt": end_time}
-        async with session.get(KUCOIN_URL, params=params, timeout=20) as resp:
-            await asyncio.sleep(0.5)
-            if resp.status == 200:
-                data = await resp.json()
-                candles = data.get("data", [])
-                if candles and len(candles) >= min_required:
-                    result[tf] = [{
-                        't': int(c[0]), 'o': float(c[1]), 'c': float(c[2]),
-                        'h': float(c[3]), 'l': float(c[4]), 'v': float(c[5])
-                    } for c in candles]
-    return symbol, result if result else None
+    try:
+        end_time = int(datetime.utcnow().timestamp())
+        result = {}
 
+        for tf, api_tf in intervals.items():
+            # بازه‌ی زمانی متفاوت برای هر تایم‌فریم
+            if tf == "4h":
+                start_time = end_time - 40*24*3600
+                min_required = 10
+            elif tf == "1h":
+                start_time = end_time - 14*24*3600
+                min_required = 50
+            else:
+                start_time = end_time - 7*24*3600
+                min_required = 50
+
+            params = {"symbol": symbol, "type": api_tf,
+                      "startAt": start_time, "endAt": end_time}
+            async with session.get(KUCOIN_URL, params=params, timeout=20) as resp:
+                await asyncio.sleep(0.5)
+                if resp.status == 200:
+                    data = await resp.json()
+                    candles = data.get("data", [])
+                    if candles and len(candles) >= min_required:
+                        parsed = [
+                            {
+                                't': int(c[0]),
+                                'o': float(c[1]),
+                                'c': float(c[2]),
+                                'h': float(c[3]),
+                                'l': float(c[4]),
+                                'v': float(c[5])
+                            }
+                            for c in candles
+                        ]
+                        result[tf] = parsed
+        return symbol, result if result else None
+    except Exception as e:
+        logger.error(f"❌ خطا در دریافت داده برای {symbol}: {e}")
+        return symbol, None
 
 
 # ========== ارسال سیگنال ==========
@@ -90,22 +120,22 @@ def send_signal(symbol, analysis_data, check_result, direction):
     try:
         r = requests.post(url,json=payload,timeout=15)
         if r.status_code == 200:
-            print(f"✅ سیگنال {check_result['risk_name']} برای {symbol} ارسال شد")
+            logger.info(f"✅ سیگنال {check_result['risk_name']} برای {symbol} ارسال شد")
         else:
-            print(f"⚠️ ارسال تلگرام ناکام: {r.status_code} {r.text}")
+            logger.warning(f"⚠️ ارسال تلگرام ناکام: {r.status_code} {r.text}")
     except Exception as e:
-        print(f"❌ خطا در ارسال سیگنال: {e}")
+        logger.error(f"❌ خطا در ارسال سیگنال: {e}")
 def process_symbol(symbol, data):
     if not data:
-        print(f"❌ دریافت داده ناموفق برای {symbol}")
+        logger.error(f"❌ دریافت داده ناموفق برای {symbol}")
         return None
 
     closes = {tf: [c['c'] for c in data[tf]] for tf in data}
     analysis = {'last_close': closes['5m'][-1], 'closes': closes, 'data': data}
 
-    print(f"\n📊 گزارش کامل {symbol}:")
-    print("-"*60)
-    print(f"💰 قیمت فعلی: {analysis['last_close']:.4f}")
+    logger.info(f"\n📊 گزارش کامل {symbol}:")
+    logger.info("-"*60)
+    logger.info(f"💰 قیمت فعلی: {analysis['last_close']:.4f}")
 
     # EMA
     for tf in ['5m','15m','30m','1h','4h']:
@@ -113,52 +143,45 @@ def process_symbol(symbol, data):
             ema21 = calculate_ema(closes[tf],21)
             ema55 = calculate_ema(closes[tf],55)
             ema200 = calculate_ema(closes[tf],200) if len(closes[tf])>=200 else None
-            ema21_str = f"{ema21:.4f}" if ema21 is not None else "N/A"
-            ema55_str = f"{ema55:.4f}" if ema55 is not None else "N/A"
-            ema200_str = f"{ema200:.4f}" if ema200 is not None else "N/A"
-            print(f"  • {tf}: EMA21={ema21_str}, EMA55={ema55_str}, EMA200={ema200_str}")
+            logger.info(f"  • {tf}: EMA21={ema21}, EMA55={ema55}, EMA200={ema200}")
 
     # RSI
-    print("\n📊 RSI:")
+    logger.info("\n📊 RSI:")
     for tf in ['5m','15m','30m','1h','4h']:
         if tf in closes:
             rsi_val = calculate_rsi(closes[tf],14)
-            rsi_str = f"{rsi_val:.2f}" if rsi_val is not None else "N/A"
-            print(f"  • {tf}: {rsi_str}")
+            logger.info(f"  • {tf}: {rsi_val}")
 
     # MACD
-    print("\n🌀 MACD:")
+    logger.info("\n🌀 MACD:")
     for tf in ['5m','15m','30m','1h','4h']:
         if tf in closes:
             macd_obj = calculate_macd(closes[tf])
-            macd_str = f"{macd_obj['macd']:.6f}" if macd_obj['macd'] is not None else "N/A"
-            signal_str = f"{macd_obj['signal']:.6f}" if macd_obj['signal'] is not None else "N/A"
-            hist_str = f"{macd_obj['histogram']:.6f}" if macd_obj['histogram'] is not None else "N/A"
-            print(f"  • {tf}: MACD={macd_str}, Signal={signal_str}, Hist={hist_str}")
+            logger.info(f"  • {tf}: MACD={macd_obj['macd']}, Signal={macd_obj['signal']}, Hist={macd_obj['histogram']}")
 
     # قدرت کندل
     if '5m' in data:
         strength_5m = body_strength(data['5m'][-1])
-        print(f"\n🕯️ قدرت کندل 5m: {strength_5m:.2f}")
+        logger.info(f"\n🕯️ قدرت کندل 5m: {strength_5m:.2f}")
 
-    print("-"*60)
+    logger.info("-"*60)
 
     # بررسی شرایط سیگنال
-    print("\n🔎 بررسی شرایط سیگنال...")
+    logger.info("\n🔎 بررسی شرایط سیگنال...")
     any_signal = False
     for direction in ['LONG','SHORT']:
         dir_text = "صعودی" if direction=='LONG' else "نزولی"
-        print(f"\n➡️ بررسی جهت {dir_text}:")
+        logger.info(f"\n➡️ بررسی جهت {dir_text}:")
         for risk in RISK_LEVELS:
             res = check_rules_for_level(analysis, risk, direction)
-            print(f"   سطح {risk['name']} → قوانین گذرانده: {res['passed_count']}/9 | دلایل: {', '.join(res['reasons'])}")
+            logger.info(f"   سطح {risk['name']} → قوانین گذرانده: {res['passed_count']}/9 | دلایل: {', '.join(res['reasons'])}")
             if res['passed']:
                 any_signal = True
-                print(f"   ✅ تصمیم: سیگنال {risk['name']} {dir_text}")
+                logger.info(f"   ✅ تصمیم: سیگنال {risk['name']} {dir_text}")
                 send_signal(symbol, analysis, res, direction)
 
     if not any_signal:
-        print("📭 هیچ سیگنال معتبری یافت نشد")
+        logger.info("📭 هیچ سیگنال معتبری یافت نشد")
 
     return True
 
@@ -169,11 +192,11 @@ async def main_async():
     server_start = datetime.now()
     tehran_start = datetime.now(ZoneInfo("Asia/Tehran"))
 
-    print("="*80)
-    print("🚀 شروع تحلیل و سیگنال‌دهی (async)")
-    print(f"⏰ زمان شروع (سرور): {server_start.strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"⏰ زمان شروع (تهران): {tehran_start.strftime('%Y-%m-%d %H:%M:%S')}")
-    print("="*80)
+    logger.info("="*80)
+    logger.info("🚀 شروع تحلیل و سیگنال‌دهی (async)")
+    logger.info(f"⏰ زمان شروع (سرور): {server_start.strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info(f"⏰ زمان شروع (تهران): {tehran_start.strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info("="*80)
 
     ok_symbols, fail_symbols = [], []
 
@@ -183,24 +206,24 @@ async def main_async():
 
     # پردازش نتایج
     for i, (sym, data) in enumerate(results, 1):
-        print(f"\n[{i}/{len(SYMBOLS)}] پردازش نماد {sym}")
+        logger.info(f"\n[{i}/{len(SYMBOLS)}] پردازش نماد {sym}")
         if data:
             ok_symbols.append(sym)
             process_symbol(sym, data)
         else:
             fail_symbols.append(sym)
-            print(f"❌ داده ناقص یا خطا برای {sym}")
+            logger.error(f"❌ داده ناقص یا خطا برای {sym}")
 
     duration = time.perf_counter() - start_perf
     server_end = datetime.now()
     tehran_end = datetime.now(ZoneInfo("Asia/Tehran"))
 
-    print("\n✅ پردازش کامل شد")
-    print(f"⏰ پایان (سرور): {server_end.strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"⏰ پایان (تهران): {tehran_end.strftime('%Y-%m-%d %H:%M:%S')}")
-    print("="*80)
+    logger.info("\n✅ پردازش کامل شد")
+    logger.info(f"⏰ پایان (سرور): {server_end.strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info(f"⏰ پایان (تهران): {tehran_end.strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info("="*80)
 
-    # پیام جدید گزارش کلی
+    # پیام گزارش کلی
     report_msg = (
         "📊 گزارش اجرای ربات\n"
         f"✅ ارزهای کامل: {', '.join(ok_symbols) if ok_symbols else 'هیچکدام'}\n"
@@ -215,15 +238,16 @@ async def main_async():
     try:
         r = requests.post(url,json=payload,timeout=15)
         if r.status_code == 200:
-            print("✅ گزارش کلی به تلگرام ارسال شد")
+            logger.info("✅ گزارش کلی به تلگرام ارسال شد")
         else:
-            print(f"⚠️ ارسال گزارش کلی ناکام: {r.status_code} {r.text}")
+            logger.warning(f"⚠️ ارسال گزارش کلی ناکام: {r.status_code} {r.text}")
     except Exception as e:
-        print(f"❌ خطا در ارسال گزارش کلی: {e}")
+        logger.error(f"❌ خطا در ارسال گزارش کلی: {e}")
+
 
 # ========== اجرا ==========
 if __name__=="__main__":
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print("⚠️ تنظیمات تلگرام را بررسی کنید!")
+        logger.warning("⚠️ تنظیمات تلگرام را بررسی کنید!")
     else:
         asyncio.run(main_async())
