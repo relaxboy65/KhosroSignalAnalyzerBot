@@ -6,19 +6,16 @@ from indicators import (
 )
 
 def check_rules_for_level(analysis_data, risk_config, direction):
-    """
-    بررسی قوانین برای یک سطح ریسک خاص و یک جهت (LONG یا SHORT)
-    """
     last_close = analysis_data['last_close']
     closes = analysis_data['closes']
-    data = analysis_data['data']  # دیکشنری تایم‌فریم‌ها به لیست کندل‌ها
+    data = analysis_data['data']
 
     passed_rules = []
     reasons = []
 
     risk_key = risk_config['key']
 
-    # Rule 1: روند 4h (EMAها + ساختار)
+    # Rule 1: روند 4h (EMA + ساختار)
     if '4h' in data:
         candles_4h = data['4h']
         ema21 = calculate_ema(closes['4h'], 21)
@@ -36,11 +33,11 @@ def check_rules_for_level(analysis_data, risk_config, direction):
         struct_count = 5 if risk_key == 'LOW' else 4 if risk_key == 'MEDIUM' else 3
         struct_ok = hhhl_lhll_structure(candles_4h, count=struct_count, direction=direction)
 
-        if len(ema_details) >= (3 if risk_key == 'LOW' else 2 if risk_key == 'MEDIUM' else 1) and struct_ok:
+        if len(ema_details) >= (3 if risk_key=='LOW' else 2 if risk_key=='MEDIUM' else 1) and struct_ok:
             passed_rules.append('روند 4h')
-            reasons.append(f"روند 4h: بالای/زیر {'، '.join(ema_details)} + ساختار {'HH/HL' if direction == 'LONG' else 'LH/LL'} در {struct_count} کندل")
+            reasons.append(f"روند 4h: بالای/زیر {'، '.join(ema_details)} + ساختار {'HH/HL' if direction=='LONG' else 'LH/LL'} در {struct_count} کندل")
 
-    # Rule 2: روند 1h (EMA21 و EMA55 + ساختار)
+    # Rule 2: روند 1h
     if '1h' in data:
         candles_1h = data['1h']
         ema21_1h = calculate_ema(closes['1h'], 21)
@@ -54,7 +51,7 @@ def check_rules_for_level(analysis_data, risk_config, direction):
 
         if ema_ok and struct_ok:
             passed_rules.append('روند 1h')
-            reasons.append(f"روند 1h: بالای/زیر EMA21 و EMA55 + ساختار {'HH/HL' if direction == 'LONG' else 'LH/LL'} در {struct_count} کندل")
+            reasons.append(f"روند 1h: بالای/زیر EMA21 و EMA55 + ساختار {'HH/HL' if direction=='LONG' else 'LH/LL'}")
 
     # Rule 3: EMA21 + ساختار در 30m
     if '30m' in data:
@@ -64,19 +61,21 @@ def check_rules_for_level(analysis_data, risk_config, direction):
 
         if price_ok and struct_ok:
             passed_rules.append('EMA21 + ساختار 30m')
-            reasons.append(f"قیمت {'بالای' if direction == 'LONG' else 'زیر'} EMA21 + ساختار {'HH/HL' if direction == 'LONG' else 'LH/LL'} در 30m")
+            reasons.append(f"قیمت {'بالای' if direction=='LONG' else 'زیر'} EMA21 + ساختار در 30m")
 
-    # Rule 4: قدرت کندل 15m
+    # Rule 4: قدرت کندل 15m (۵٪ سخت‌تر)
     if '15m' in data and len(data['15m']) >= 1:
         bs = body_strength(data['15m'][-1])
         thr = risk_config['rules']['candle_15m_strength']
         if risk_key == 'MEDIUM':
-            thr = 0.45  # کمی انعطاف برای میانی
+            thr = 0.50  # سخت‌تر از 0.45
+        if risk_key == 'HIGH':
+            thr = 0.40  # سخت‌تر از 0.35
         if bs > thr:
             passed_rules.append('کندل قوی 15m')
             reasons.append(f"قدرت کندل 15m = {bs:.2f} (حد > {thr})")
 
-    # Rule 5: ورود + حجم (5m و 15m)
+    # Rule 5: ورود + حجم (۵٪ سخت‌تر)
     vol_ok = False
     entry_ok = False
 
@@ -88,12 +87,12 @@ def check_rules_for_level(analysis_data, risk_config, direction):
 
         vol_5m = data['5m'][-1]['v']
         avg_vol_5m = sum(c['v'] for c in data['5m'][-10:]) / 10.0
-        vol_ok_5m = vol_5m >= 1.2 * avg_vol_5m
+        vol_ok_5m = vol_5m >= 1.3 * avg_vol_5m  # سخت‌تر از 1.2
 
         if '15m' in data and len(data['15m']) >= 10:
             vol_15m = data['15m'][-1]['v']
             avg_vol_15m = sum(c['v'] for c in data['15m'][-10:]) / 10.0
-            vol_ok_15m = vol_15m >= 1.1 * avg_vol_15m
+            vol_ok_15m = vol_15m >= 1.2 * avg_vol_15m  # سخت‌تر از 1.1
             vol_ok = vol_ok_5m or vol_ok_15m
         else:
             vol_ok = vol_ok_5m
@@ -101,25 +100,25 @@ def check_rules_for_level(analysis_data, risk_config, direction):
         entry_cond = break_ok or (near_ok and risk_key != 'LOW')
         if entry_cond and vol_ok:
             passed_rules.append('ورود + حجم')
-            reasons.append(f"{'شکست' if break_ok else 'نزدیکی'} سطح با حجم بالا در 5m/15m")
+            reasons.append(f"{'شکست' if break_ok else 'نزدیکی'} سطح با حجم بالا")
 
     # Rule 6: RSI (با شدت)
     req = risk_config['rules']['rsi_threshold_count']
     rsi_ok, rsi_count, rsi_vals = rsi_count_ok(closes, direction, req)
-    extra_rsi = sum(1 for v in rsi_vals.values() if (direction == 'LONG' and v > 70) or (direction == 'SHORT' and v < 30))
+    extra_rsi = sum(1 for v in rsi_vals.values() if (direction=='LONG' and v > 70) or (direction=='SHORT' and v < 30))
     if rsi_ok or (rsi_count >= req - 1 and extra_rsi >= 1):
         passed_rules.append('RSI')
         reasons.append(f"RSI: {rsi_count}/5 همسو + {extra_rsi} خیلی قوی (>70/<30)")
 
-    # Rule 7: MACD (با شدت هیستوگرام)
+    # Rule 7: MACD (با شدت هیستوگرام — سخت‌تر)
     reqm = risk_config['rules']['macd_threshold_count']
     macd_ok, macd_count, macd_vals = macd_count_ok(closes, direction, reqm)
     extra_macd = 0
-    hist_values = [v[1] for v in macd_vals.values() if v[1] is not None]  # v[1] = histogram
-    if hist_values:
-        avg_hist = sum(abs(h) for h in hist_values[-10:]) / len(hist_values[-10:])
-        for h in hist_values[-5:]:  # فقط ۵ کندل آخر رو چک می‌کنیم
-            if (direction == 'LONG' and h > avg_hist * 1.1) or (direction == 'SHORT' and h < -avg_hist * 1.1):
+    hist_values = [v[1] for v in macd_vals.values() if v[1] is not None]
+    if len(hist_values) >= 5:
+        avg_hist = sum(abs(h) for h in hist_values[-5:]) / 5.0
+        for h in hist_values[-3:]:  # فقط ۳ کندل آخر چک می‌شه
+            if (direction=='LONG' and h > avg_hist * 1.2) or (direction=='SHORT' and h < -avg_hist * 1.2):
                 extra_macd += 1
     if macd_ok or (macd_count >= reqm - 1 and extra_macd >= 1):
         passed_rules.append('MACD')
@@ -130,24 +129,24 @@ def check_rules_for_level(analysis_data, risk_config, direction):
         passed_rules.append('عدم واگرایی')
         reasons.append("بدون واگرایی در 1h و 4h")
 
-    # Rule 9: حجم اسپایک + قدرت کندل در 15m
+    # Rule 9: حجم اسپایک + قدرت کندل در 15m (سخت‌تر)
     if '15m' in data and len(data['15m']) >= 10:
         vol_15m = data['15m'][-1]['v']
         avg_vol_15m = sum(c['v'] for c in data['15m'][-10:]) / 10.0
         bs15 = body_strength(data['15m'][-1])
-        if vol_15m >= 1.2 * avg_vol_15m and bs15 > 0.4:
+        if vol_15m >= 1.25 * avg_vol_15m and bs15 > 0.45:  # سخت‌تر از 1.2 و 0.4
             passed_rules.append('حجم + کندل 15m')
             reasons.append(f"حجم اسپایک + قدرت کندل 15m = {bs15:.2f}")
 
     passed_count = len(passed_rules)
 
-    # آستانه‌های نهایی (متعادل و واقع‌بینانه)
+    # آستانه‌های نهایی (۵٪ سخت‌تر + حفظ سه سطح)
     if risk_key == 'LOW':
-        decision = passed_count >= 7
+        decision = passed_count >= 8   # سخت‌ترین
     elif risk_key == 'MEDIUM':
         decision = passed_count >= 7
     else:  # HIGH
-        decision = passed_count >= 6
+        decision = passed_count >= 6   # حساس‌ترین
 
     return {
         'passed': decision,
