@@ -23,13 +23,20 @@ intervals = {
 }
 
 # ========== دریافت داده برای یک نماد ==========
-async def fetch_all_timeframes(session, symbol, days=7):  # بازه را بیشتر کردیم
+async def fetch_all_timeframes(session, symbol, days=7):
     try:
         end_time = int(datetime.utcnow().timestamp())
-        start_time = end_time - days*24*3600
-
         result = {}
+
         for tf, api_tf in intervals.items():
+            # برای تایم‌فریم 4h بازه را 30 روز می‌گیریم
+            if tf == "4h":
+                start_time = end_time - 30*24*3600
+                min_required = 10   # کافیست ۱۰ کندل داشته باشیم
+            else:
+                start_time = end_time - days*24*3600
+                min_required = 50
+
             params = {"symbol": symbol, "type": api_tf,
                       "startAt": start_time, "endAt": end_time}
             async with session.get(KUCOIN_URL, params=params, timeout=20) as resp:
@@ -37,11 +44,6 @@ async def fetch_all_timeframes(session, symbol, days=7):  # بازه را بیش
                 if resp.status == 200:
                     data = await resp.json()
                     candles = data.get("data", [])
-                    # شرط تعداد کندل‌ها
-                    if tf == "4h":
-                        min_required = 10
-                    else:
-                        min_required = 50
                     if candles and len(candles) >= min_required:
                         parsed = [
                             {
@@ -58,7 +60,6 @@ async def fetch_all_timeframes(session, symbol, days=7):  # بازه را بیش
         return symbol, result if result else None
     except Exception:
         return symbol, None
-
 
 # ========== ارسال سیگنال ==========
 def send_signal(symbol, analysis_data, check_result, direction):
