@@ -45,7 +45,6 @@ async def fetch_all_timeframes(session, symbol, interval="5min", days=3):
     except Exception:
         return symbol, None
 
-
 # ========== ارسال سیگنال ==========
 def send_signal(symbol, analysis_data, check_result, direction):
     clean_symbol = symbol.replace('-USDT','')
@@ -96,9 +95,8 @@ def process_symbol(symbol, data):
         print(f"❌ دریافت داده ناموفق برای {symbol}")
         return None
 
-closes = {tf: [c['c'] for c in data[tf]] for tf in data}
-analysis = {'last_close': closes['5m'][-1], 'closes': closes, 'data': data}
-
+    closes = {tf: [c['c'] for c in data[tf]] for tf in data}
+    analysis = {'last_close': closes['5m'][-1], 'closes': closes, 'data': data}
 
     print(f"\n📊 گزارش کامل {symbol}:")
     print("-"*60)
