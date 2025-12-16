@@ -1,15 +1,64 @@
+import aiohttp
+import asyncio
 import requests
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo   # پایتون 3.9+
 
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SYMBOLS, RISK_LEVELS, RISK_PARAMS
-from data_fetcher import fetch_all_timeframes
 from indicators import (
     calculate_rsi, calculate_ema, calculate_macd, body_strength,
     swing_levels, calculate_atr
 )
 from rules import check_rules_for_level
+
+KUCOIN_URL = "https://api.kucoin.com/api/v1/market/candles"
+
+intervals = {
+    "5m": "5min",
+    "15m": "15min",
+    "30m": "30min",
+    "1h": "1hour",
+    "4h": "4hour"
+}
+
+# ========== دریافت داده برای یک نماد ==========
+async def fetch_all_timeframes(session, symbol, days=7):  # بازه را بیشتر کردیم
+    try:
+        end_time = int(datetime.utcnow().timestamp())
+        start_time = end_time - days*24*3600
+
+        result = {}
+        for tf, api_tf in intervals.items():
+            params = {"symbol": symbol, "type": api_tf,
+                      "startAt": start_time, "endAt": end_time}
+            async with session.get(KUCOIN_URL, params=params, timeout=20) as resp:
+                await asyncio.sleep(0.5)  # تاخیر کوچک برای پایداری
+                if resp.status == 200:
+                    data = await resp.json()
+                    candles = data.get("data", [])
+                    # شرط تعداد کندل‌ها
+                    if tf == "4h":
+                        min_required = 10
+                    else:
+                        min_required = 50
+                    if candles and len(candles) >= min_required:
+                        parsed = [
+                            {
+                                't': int(c[0]),
+                                'o': float(c[1]),
+                                'c': float(c[2]),
+                                'h': float(c[3]),
+                                'l': float(c[4]),
+                                'v': float(c[5])
+                            }
+                            for c in candles
+                        ]
+                        result[tf] = parsed
+        return symbol, result if result else None
+    except Exception:
+        return symbol, None
+
 
 # ========== ارسال سیگنال ==========
 def send_signal(symbol, analysis_data, check_result, direction):
@@ -28,7 +77,6 @@ def send_signal(symbol, analysis_data, check_result, direction):
         stop = sl if direction=='LONG' else sh
         target = last + RISK_PARAMS['rr_fallback']*(last-stop) if direction=='LONG' else last - RISK_PARAMS['rr_fallback']*(stop-last)
 
-    # زمان سرور و تهران
     server_time = datetime.now()
     tehran_time = datetime.now(ZoneInfo("Asia/Tehran"))
 
@@ -54,13 +102,10 @@ def send_signal(symbol, analysis_data, check_result, direction):
             print(f"⚠️ ارسال تلگرام ناکام: {r.status_code} {r.text}")
     except Exception as e:
         print(f"❌ خطا در ارسال سیگنال: {e}")
-
-# ========== پردازش نماد ==========
-def process_symbol(symbol):
-    data = fetch_all_timeframes(symbol)
+def process_symbol(symbol, data):
     if not data:
         print(f"❌ دریافت داده ناموفق برای {symbol}")
-        return
+        return None
 
     closes = {tf: [c['c'] for c in data[tf]] for tf in data}
     analysis = {'last_close': closes['5m'][-1], 'closes': closes, 'data': data}
@@ -122,23 +167,38 @@ def process_symbol(symbol):
     if not any_signal:
         print("📭 هیچ سیگنال معتبری یافت نشد")
 
+    return True
+
+
 # ========== تابع اصلی ==========
-def main():
+async def main_async():
+    start_perf = time.perf_counter()
     server_start = datetime.now()
     tehran_start = datetime.now(ZoneInfo("Asia/Tehran"))
 
     print("="*80)
-    print("🚀 شروع تحلیل و سیگنال‌دهی")
+    print("🚀 شروع تحلیل و سیگنال‌دهی (async)")
     print(f"⏰ زمان شروع (سرور): {server_start.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"⏰ زمان شروع (تهران): {tehran_start.strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*80)
 
-    for i, sym in enumerate(SYMBOLS,1):
-        print(f"\n[{i}/{len(SYMBOLS)}] پردازش نماد {sym}")
-        process_symbol(sym)
-        if i < len(SYMBOLS):
-            time.sleep(1)   # فاصله بین پردازش هر ارز
+    ok_symbols, fail_symbols = [], []
 
+    async with aiohttp.ClientSession() as session:
+        tasks = [fetch_all_timeframes(session, sym) for sym in SYMBOLS]
+        results = await asyncio.gather(*tasks)
+
+    # پردازش نتایج
+    for i, (sym, data) in enumerate(results, 1):
+        print(f"\n[{i}/{len(SYMBOLS)}] پردازش نماد {sym}")
+        if data:
+            ok_symbols.append(sym)
+            process_symbol(sym, data)
+        else:
+            fail_symbols.append(sym)
+            print(f"❌ داده ناقص یا خطا برای {sym}")
+
+    duration = time.perf_counter() - start_perf
     server_end = datetime.now()
     tehran_end = datetime.now(ZoneInfo("Asia/Tehran"))
 
@@ -147,9 +207,30 @@ def main():
     print(f"⏰ پایان (تهران): {tehran_end.strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*80)
 
+    # پیام جدید گزارش کلی
+    report_msg = (
+        "📊 گزارش اجرای ربات\n"
+        f"✅ ارزهای کامل: {', '.join(ok_symbols) if ok_symbols else 'هیچکدام'}\n"
+        f"❌ ارزهای ناقص: {', '.join(fail_symbols) if fail_symbols else 'هیچکدام'}\n"
+        f"⏱ مدت اجرا: {duration:.2f} ثانیه\n"
+        f"⏰ پایان (سرور): {server_end.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        f"⏰ پایان (تهران): {tehran_end.strftime('%Y-%m-%d %H:%M:%S')}"
+    )
+
+    url=f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload={"chat_id":TELEGRAM_CHAT_ID,"text":report_msg}
+    try:
+        r = requests.post(url,json=payload,timeout=15)
+        if r.status_code == 200:
+            print("✅ گزارش کلی به تلگرام ارسال شد")
+        else:
+            print(f"⚠️ ارسال گزارش کلی ناکام: {r.status_code} {r.text}")
+    except Exception as e:
+        print(f"❌ خطا در ارسال گزارش کلی: {e}")
+
 # ========== اجرا ==========
 if __name__=="__main__":
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print("⚠️ تنظیمات تلگرام را بررسی کنید!")
     else:
-        main()
+        asyncio.run(main_async())
