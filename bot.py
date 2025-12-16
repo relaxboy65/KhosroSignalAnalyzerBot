@@ -1,6 +1,8 @@
 import requests
 import time
 from datetime import datetime
+from zoneinfo import ZoneInfo   # پایتون 3.9+
+
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SYMBOLS, RISK_LEVELS, RISK_PARAMS
 from data_fetcher import fetch_all_timeframes
 from indicators import (
@@ -13,7 +15,6 @@ from rules import check_rules_for_level
 def send_signal(symbol, analysis_data, check_result, direction):
     clean_symbol = symbol.replace('-USDT','')
     dir_emoji = '🟢' if direction=='LONG' else '🔴'
-
     risk_symbol = '🦁' if check_result['risk_name']=='ریسک کم' else '🐺' if check_result['risk_name']=='ریسک میانی' else '🐒'
 
     last = analysis_data['last_close']
@@ -27,6 +28,10 @@ def send_signal(symbol, analysis_data, check_result, direction):
         stop = sl if direction=='LONG' else sh
         target = last + RISK_PARAMS['rr_fallback']*(last-stop) if direction=='LONG' else last - RISK_PARAMS['rr_fallback']*(stop-last)
 
+    # زمان سرور و تهران
+    server_time = datetime.now()
+    tehran_time = datetime.now(ZoneInfo("Asia/Tehran"))
+
     msg = (
         f"{dir_emoji} {risk_symbol} {check_result['risk_name']} | {'لانگ' if direction=='LONG' else 'شورت'}\n"
         f"نماد: {clean_symbol}\n"
@@ -35,7 +40,8 @@ def send_signal(symbol, analysis_data, check_result, direction):
         f"ورود:\n{last:.4f}\n"
         f"استاپ:\n{stop:.4f}\n"
         f"تارگت:\n{target:.4f}\n"
-        f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        f"⏰ زمان سرور: {server_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        f"⏰ زمان تهران: {tehran_time.strftime('%Y-%m-%d %H:%M:%S')}"
     )
 
     url=f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -118,9 +124,13 @@ def process_symbol(symbol):
 
 # ========== تابع اصلی ==========
 def main():
+    server_start = datetime.now()
+    tehran_start = datetime.now(ZoneInfo("Asia/Tehran"))
+
     print("="*80)
     print("🚀 شروع تحلیل و سیگنال‌دهی")
-    print(f"⏰ زمان شروع: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"⏰ زمان شروع (سرور): {server_start.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"⏰ زمان شروع (تهران): {tehran_start.strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*80)
 
     for i, sym in enumerate(SYMBOLS,1):
@@ -129,8 +139,12 @@ def main():
         if i < len(SYMBOLS):
             time.sleep(10)   # فاصله بین پردازش هر ارز
 
+    server_end = datetime.now()
+    tehran_end = datetime.now(ZoneInfo("Asia/Tehran"))
+
     print("\n✅ پردازش کامل شد")
-    print(f"⏰ پایان: {datetime.now().strftime('%H:%M:%S')}")
+    print(f"⏰ پایان (سرور): {server_end.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"⏰ پایان (تهران): {tehran_end.strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*80)
 
 # ========== اجرا ==========
