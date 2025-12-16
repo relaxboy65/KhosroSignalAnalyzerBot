@@ -63,19 +63,20 @@ def check_rules_for_level(analysis_data, risk_config, direction):
             passed_rules.append('EMA21 + ساختار 30m')
             reasons.append(f"قیمت {'بالای' if direction=='LONG' else 'زیر'} EMA21 + ساختار در 30m")
 
-    # Rule 4: قدرت کندل 15m (۵٪ آسان‌تر برای ریسک بالا)
+    # Rule 4: قدرت کندل 15m (تغییرات پیشنهادی تو)
     if '15m' in data and len(data['15m']) >= 1:
         bs = body_strength(data['15m'][-1])
-        thr = risk_config['rules']['candle_15m_strength']
-        if risk_key == 'MEDIUM':
+        if risk_key == 'LOW':
+            thr = 0.60
+        elif risk_key == 'MEDIUM':
             thr = 0.45
-        if risk_key == 'HIGH':
-            thr = 0.35  # آسان‌تر از 0.4
+        else:  # HIGH
+            thr = 0.35
         if bs > thr:
             passed_rules.append('کندل قوی 15m')
             reasons.append(f"قدرت کندل 15m = {bs:.2f} (حد > {thr})")
 
-    # Rule 5: ورود + حجم (۵٪ آسان‌تر)
+    # Rule 5: ورود + حجم (تغییرات پیشنهادی تو)
     vol_ok = False
     entry_ok = False
 
@@ -87,12 +88,20 @@ def check_rules_for_level(analysis_data, risk_config, direction):
 
         vol_5m = data['5m'][-1]['v']
         avg_vol_5m = sum(c['v'] for c in data['5m'][-10:]) / 10.0
-        vol_ok_5m = vol_5m >= 1.2 * avg_vol_5m  # آسان‌تر از 1.3
+
+        if risk_key == 'LOW':
+            vol_threshold = 1.3
+        elif risk_key == 'MEDIUM':
+            vol_threshold = 1.2
+        else:
+            vol_threshold = 1.1
+
+        vol_ok_5m = vol_5m >= vol_threshold * avg_vol_5m
 
         if '15m' in data and len(data['15m']) >= 10:
             vol_15m = data['15m'][-1]['v']
             avg_vol_15m = sum(c['v'] for c in data['15m'][-10:]) / 10.0
-            vol_ok_15m = vol_15m >= 1.2 * avg_vol_15m  # آسان‌تر از 1.25
+            vol_ok_15m = vol_15m >= vol_threshold * avg_vol_15m
             vol_ok = vol_ok_5m or vol_ok_15m
         else:
             vol_ok = vol_ok_5m
@@ -100,53 +109,73 @@ def check_rules_for_level(analysis_data, risk_config, direction):
         entry_cond = break_ok or (near_ok and risk_key != 'LOW')
         if entry_cond and vol_ok:
             passed_rules.append('ورود + حجم')
-            reasons.append(f"{'شکست' if break_ok else 'نزدیکی'} سطح با حجم بالا")
+            reasons.append(f"{'شکست' if break_ok else 'نزدیکی'} سطح با حجم بالا (≥{vol_threshold}x)")
 
-    # Rule 6: RSI (با شدت)
+    # Rule 6: RSI (تغییرات پیشنهادی تو)
     req = risk_config['rules']['rsi_threshold_count']
     rsi_ok, rsi_count, rsi_vals = rsi_count_ok(closes, direction, req)
     extra_rsi = sum(1 for v in rsi_vals.values() if (direction=='LONG' and v > 70) or (direction=='SHORT' and v < 30))
-    if rsi_ok or (rsi_count >= req - 1 and extra_rsi >= 1):
+
+    if risk_key == 'LOW':
+        rsi_condition = rsi_count >= 4 and extra_rsi >= 2
+    elif risk_key == 'MEDIUM':
+        rsi_condition = rsi_count >= 3 and extra_rsi >= 1
+    else:  # HIGH
+        rsi_condition = rsi_count >= 2
+
+    if rsi_condition:
         passed_rules.append('RSI')
         reasons.append(f"RSI: {rsi_count}/5 همسو + {extra_rsi} خیلی قوی (>70/<30)")
 
-    # Rule 7: MACD (با شدت هیستوگرام — ۵٪ آسان‌تر)
+    # Rule 7: MACD (تغییرات پیشنهادی تو)
     reqm = risk_config['rules']['macd_threshold_count']
     macd_ok, macd_count, macd_vals = macd_count_ok(closes, direction, reqm)
     extra_macd = 0
-    hist_values = [v[1] for v in macd_vals.values() if v[1] is not None]
-    if len(hist_values) >= 5:
-        avg_hist = sum(abs(h) for h in hist_values[-5:]) / 5.0
-        for h in hist_values[-3:]:
-            if (direction=='LONG' and h > avg_hist * 1.1) or (direction=='SHORT' and h < -avg_hist * 1.1):
-                extra_macd += 1
-    if macd_ok or (macd_count >= reqm - 1 and extra_macd >= 1):
+    hist_values = [v[1] for v in macd_vals.values() if v[1] is not None]  # histogram
+
+    if len(hist_values) >= 10:
+        avg_hist_10 = sum(abs(h) for h in hist_values[-10:]) / 10.0
+    else:
+        avg_hist_10 = 0.000001  # جلوگیری از تقسیم بر صفر
+
+    for i in range(1, len(hist_values)):
+        current = hist_values[i]
+        prev = hist_values[i-1]
+        multiplier = 1.3 if risk_key == 'LOW' else 1.2 if risk_key == 'MEDIUM' else 1.1
+        if (direction=='LONG' and current > avg_hist_10 * multiplier) or (direction=='SHORT' and current < -avg_hist_10 * multiplier):
+            extra_macd += 1
+        if (direction=='LONG' and current > prev * multiplier) or (direction=='SHORT' and current < prev * multiplier):
+            extra_macd += 1
+
+    if macd_ok or extra_macd > 0:
         passed_rules.append('MACD')
-        reasons.append(f"MACD: {macd_count}/5 همسو + {extra_macd} هیستوگرام قوی")
+        reasons.append(f"MACD: {macd_count}/5 همسو + {extra_macd} شدت قوی")
 
     # Rule 8: عدم واگرایی
     if no_divergence(data, closes):
         passed_rules.append('عدم واگرایی')
         reasons.append("بدون واگرایی در 1h و 4h")
 
-    # Rule 9: حجم اسپایک + قدرت کندل در 15m (۵٪ آسان‌تر)
+    # Rule 9: حجم اسپایک + قدرت کندل در 15m
     if '15m' in data and len(data['15m']) >= 10:
         vol_15m = data['15m'][-1]['v']
         avg_vol_15m = sum(c['v'] for c in data['15m'][-10:]) / 10.0
+        vol_multiplier = 1.3 if risk_key == 'LOW' else 1.2 if risk_key == 'MEDIUM' else 1.1
         bs15 = body_strength(data['15m'][-1])
-        if vol_15m >= 1.2 * avg_vol_15m and bs15 > 0.4:  # آسان‌تر از 1.25 و 0.45
+        bs_thr = 0.6 if risk_key == 'LOW' else 0.45 if risk_key == 'MEDIUM' else 0.35
+        if vol_15m >= vol_multiplier * avg_vol_15m and bs15 > bs_thr:
             passed_rules.append('حجم + کندل 15m')
-            reasons.append(f"حجم اسپایک + قدرت کندل 15m = {bs15:.2f}")
+            reasons.append(f"حجم اسپایک (≥{vol_multiplier}x) + قدرت کندل 15m = {bs15:.2f}")
 
     passed_count = len(passed_rules)
 
-    # آستانه‌ها (ریسک بالا ۵٪ آسان‌تر)
+    # آستانه‌های نهایی (تغییرات پیشنهادی تو)
     if risk_key == 'LOW':
         decision = passed_count >= 7
     elif risk_key == 'MEDIUM':
         decision = passed_count >= 6
     else:  # HIGH
-        decision = passed_count >= 5   # تغییر اصلی برای ۵٪ آسان‌تر
+        decision = passed_count >= 5
 
     return {
         'passed': decision,
