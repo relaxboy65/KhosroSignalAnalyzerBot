@@ -132,9 +132,14 @@ def process_symbol(symbol, data, session):
         if tf in closes:
             ema21 = calculate_ema(closes[tf], 21)
             ema55 = calculate_ema(closes[tf], 55)
-            ema200 = calculate_ema(closes[tf], 200) if len(closes[tf]) >= 200 else "N/A"
-            logger.info(f"    • {tf}: EMA21={ema21:.4f if ema21 else 'N/A'}, EMA55={ema55:.4f if ema55 else 'N/A'}, EMA200={ema200}")
+            ema200_val = calculate_ema(closes[tf], 200) if len(closes[tf]) >= 200 else None
 
+            ema21_str = f"{ema21:.4f}" if ema21 is not None else "N/A"
+            ema55_str = f"{ema55:.4f}" if ema55 is not None else "N/A"
+            ema200_str = f"{ema200_val:.4f}" if ema200_val is not None else "N/A"
+
+            logger.info(f"    • {tf}: EMA21={ema21_str}, EMA55={ema55_str}, EMA200={ema200_str}")
+            
     # RSI
     logger.info("\n📊 RSI:")
     for tf in ['5m', '15m', '30m', '1h', '4h']:
