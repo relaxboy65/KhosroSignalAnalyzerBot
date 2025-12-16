@@ -25,9 +25,16 @@ async def fetch_all_timeframes(session, symbol, interval="5min", days=3):
                 data = await resp.json()
                 candles = data.get("data", [])
                 if candles and len(candles) >= 50:
-                    # 🔑 تبدیل همه‌ی مقادیر به عدد مثل نسخه‌ی سینک
+                    # 🔑 تبدیل به دیکشنری مثل نسخه‌ی سینک
                     parsed = [
-                        [int(c[0]), float(c[1]), float(c[2]), float(c[3]), float(c[4]), float(c[5])]
+                        {
+                            't': int(c[0]),
+                            'o': float(c[1]),
+                            'c': float(c[2]),
+                            'h': float(c[3]),
+                            'l': float(c[4]),
+                            'v': float(c[5])
+                        }
                         for c in candles
                     ]
                     return symbol, {"5m": parsed}
@@ -37,6 +44,7 @@ async def fetch_all_timeframes(session, symbol, interval="5min", days=3):
                 return symbol, None
     except Exception:
         return symbol, None
+
 
 # ========== ارسال سیگنال ==========
 def send_signal(symbol, analysis_data, check_result, direction):
@@ -88,8 +96,9 @@ def process_symbol(symbol, data):
         print(f"❌ دریافت داده ناموفق برای {symbol}")
         return None
 
-    closes = {tf: [c[2] for c in data[tf]] for tf in data}  # ستون 2 قیمت بسته شدن
-    analysis = {'last_close': closes['5m'][-1], 'closes': closes, 'data': data}
+closes = {tf: [c['c'] for c in data[tf]] for tf in data}
+analysis = {'last_close': closes['5m'][-1], 'closes': closes, 'data': data}
+
 
     print(f"\n📊 گزارش کامل {symbol}:")
     print("-"*60)
