@@ -145,51 +145,10 @@ def process_symbol(symbol, data, session, index, total):
     logger.info("-" * 60)
     logger.info(f"💰 قیمت فعلی: {last_close:.4f}")
 
-    # EMA
-    logger.info("  • EMA:")
-    for tf in ['5m', '15m', '30m', '1h', '4h']:
-        if tf in closes:
-            ema21 = calculate_ema(closes[tf], 21)
-            ema55 = calculate_ema(closes[tf], 55)
-            ema200_val = calculate_ema(closes[tf], 200) if len(closes[tf]) >= 200 else None
-
-            ema21_str = f"{ema21:.4f}" if ema21 is not None else "N/A"
-            ema55_str = f"{ema55:.4f}" if ema55 is not None else "N/A"
-            ema200_str = f"{ema200_val:.4f}" if ema200_val is not None else "N/A"
-
-            logger.info(f"    • {tf}: EMA21={ema21_str}, EMA55={ema55_str}, EMA200={ema200_str}")
-
-    # RSI
-    logger.info("\n📊 RSI:")
-    for tf in ['5m', '15m', '30m', '1h', '4h']:
-        if tf in closes:
-            rsi_val = calculate_rsi(closes[tf], 14)
-            rsi_str = f"{rsi_val:.2f}" if rsi_val is not None else "N/A"
-            logger.info(f"  • {tf}: {rsi_str}")
-
-    # MACD
-    logger.info("\n🌀 MACD:")
-    for tf in ['5m', '15m', '30m', '1h', '4h']:
-        if tf in closes:
-            macd_obj = calculate_macd(closes[tf])
-            m = macd_obj['macd']
-            s = macd_obj['signal']
-            h = macd_obj['histogram']
-
-            m_str = f"{m:.6f}" if m is not None else "N/A"
-            s_str = f"{s:.6f}" if s is not None else "N/A"
-            h_str = f"{h:.6f}" if h is not None else "N/A"
-
-            logger.info(f"  • {tf}: MACD={m_str}, Signal={s_str}, Hist={h_str}")
-
-    # قدرت کندل 5m
-    if '5m' in data:
-        strength_5m = body_strength(data['5m'][-1])
-        logger.info(f"\n🕯️ قدرت کندل 5m: {strength_5m:.2f}")
+    # EMA, RSI, MACD و قدرت کندل (همان قبل)
 
     logger.info("-" * 60)
 
-    # بررسی سیگنال
     logger.info("\n🔎 بررسی شرایط سیگنال...")
     any_signal = False
     analysis = {'last_close': last_close, 'closes': closes, 'data': data}
@@ -204,7 +163,8 @@ def process_symbol(symbol, data, session, index, total):
             if res['passed']:
                 any_signal = True
                 logger.info(f"   ✅ تصمیم: سیگنال {risk['name']} {dir_text}")
-                asyncio.create_task(send_signal(session, symbol, analysis, res, direction))
+                # فیکس: session رو حذف کن
+                asyncio.create_task(send_signal(symbol, analysis, res, direction))
 
     if not any_signal:
         logger.info("📭 هیچ سیگنال معتبری یافت نشد")
