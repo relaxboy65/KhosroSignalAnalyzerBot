@@ -63,7 +63,7 @@ def check_rules_for_level(analysis_data, risk_config, direction):
             passed_rules.append('EMA21 + ساختار 30m')
             reasons.append(f"قیمت {'بالای' if direction=='LONG' else 'زیر'} EMA21 + ساختار در 30m")
 
-    # Rule 4: قدرت کندل 15m (تغییرات پیشنهادی تو)
+    # Rule 4: قدرت کندل 15m — تغییرات پیشنهادی
     if '15m' in data and len(data['15m']) >= 1:
         bs = body_strength(data['15m'][-1])
         if risk_key == 'LOW':
@@ -76,7 +76,7 @@ def check_rules_for_level(analysis_data, risk_config, direction):
             passed_rules.append('کندل قوی 15m')
             reasons.append(f"قدرت کندل 15m = {bs:.2f} (حد > {thr})")
 
-    # Rule 5: ورود + حجم (تغییرات پیشنهادی تو)
+    # Rule 5: ورود + حجم — تغییرات پیشنهادی
     vol_ok = False
     entry_ok = False
 
@@ -93,7 +93,7 @@ def check_rules_for_level(analysis_data, risk_config, direction):
             vol_threshold = 1.3
         elif risk_key == 'MEDIUM':
             vol_threshold = 1.2
-        else:
+        else:  # HIGH
             vol_threshold = 1.1
 
         vol_ok_5m = vol_5m >= vol_threshold * avg_vol_5m
@@ -111,7 +111,7 @@ def check_rules_for_level(analysis_data, risk_config, direction):
             passed_rules.append('ورود + حجم')
             reasons.append(f"{'شکست' if break_ok else 'نزدیکی'} سطح با حجم بالا (≥{vol_threshold}x)")
 
-    # Rule 6: RSI (تغییرات پیشنهادی تو)
+    # Rule 6: RSI — تغییرات پیشنهادی
     req = risk_config['rules']['rsi_threshold_count']
     rsi_ok, rsi_count, rsi_vals = rsi_count_ok(closes, direction, req)
     extra_rsi = sum(1 for v in rsi_vals.values() if (direction=='LONG' and v > 70) or (direction=='SHORT' and v < 30))
@@ -121,27 +121,28 @@ def check_rules_for_level(analysis_data, risk_config, direction):
     elif risk_key == 'MEDIUM':
         rsi_condition = rsi_count >= 3 and extra_rsi >= 1
     else:  # HIGH
-        rsi_condition = rsi_count >= 2
+        rsi_condition = rsi_count >= 2  # فقط ۲/۵ همسو کافی است
 
     if rsi_condition:
         passed_rules.append('RSI')
         reasons.append(f"RSI: {rsi_count}/5 همسو + {extra_rsi} خیلی قوی (>70/<30)")
 
-    # Rule 7: MACD (تغییرات پیشنهادی تو)
+    # Rule 7: MACD — تغییرات پیشنهادی
     reqm = risk_config['rules']['macd_threshold_count']
     macd_ok, macd_count, macd_vals = macd_count_ok(closes, direction, reqm)
     extra_macd = 0
-    hist_values = [v[1] for v in macd_vals.values() if v[1] is not None]  # histogram
+    hist_values = [v[1] for v in macd_vals.values() if v[1] is not None]
 
     if len(hist_values) >= 10:
         avg_hist_10 = sum(abs(h) for h in hist_values[-10:]) / 10.0
     else:
-        avg_hist_10 = 0.000001  # جلوگیری از تقسیم بر صفر
+        avg_hist_10 = 0.000001
+
+    multiplier = 1.3 if risk_key == 'LOW' else 1.2 if risk_key == 'MEDIUM' else 1.1
 
     for i in range(1, len(hist_values)):
         current = hist_values[i]
         prev = hist_values[i-1]
-        multiplier = 1.3 if risk_key == 'LOW' else 1.2 if risk_key == 'MEDIUM' else 1.1
         if (direction=='LONG' and current > avg_hist_10 * multiplier) or (direction=='SHORT' and current < -avg_hist_10 * multiplier):
             extra_macd += 1
         if (direction=='LONG' and current > prev * multiplier) or (direction=='SHORT' and current < prev * multiplier):
@@ -169,13 +170,13 @@ def check_rules_for_level(analysis_data, risk_config, direction):
 
     passed_count = len(passed_rules)
 
-    # آستانه‌های نهایی (تغییرات پیشنهادی تو)
+    # آستانه‌های نهایی — تغییرات پیشنهادی
     if risk_key == 'LOW':
         decision = passed_count >= 7
     elif risk_key == 'MEDIUM':
         decision = passed_count >= 6
     else:  # HIGH
-        decision = passed_count >= 4
+        decision = passed_count >= 5
 
     return {
         'passed': decision,
