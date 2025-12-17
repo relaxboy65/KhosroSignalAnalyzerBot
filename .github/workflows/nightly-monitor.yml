@@ -1,11 +1,8 @@
-# .github/workflows/nightly-monitor.yml
 name: NightlySignalMonitor
 
 on:
   schedule:
-    # 02:00 Asia/Tehran تقریبی: 22:30 UTC روز قبل (اختلاف ممکن است با DST/Leap ثانیه)
-    # پیشنهاد: اجرا در چند ساعت نزدیک برای اطمینان
-    - cron: "30 22 * * *"
+    - cron: "30 22 * * *"   # حدود ۲ شب تهران
   workflow_dispatch:
 
 jobs:
