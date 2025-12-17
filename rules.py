@@ -98,7 +98,7 @@ def check_rules_for_level(analysis_data, risk_config, direction):
         elif risk_key == 'MEDIUM':
             thr = 0.45
         else:  # HIGH
-            thr = 0.50
+            thr = 0.45   # کمی آسان‌تر شد
         if bs15 > thr:
             passed_rules.append('کندل قوی 15m')
             reasons.append(f"قدرت کندل 15m = {bs15:.2f} (حد > {thr})")
@@ -114,7 +114,7 @@ def check_rules_for_level(analysis_data, risk_config, direction):
         vol_5m = data['5m'][-1]['v']
         avg_vol_5m = sum(c['v'] for c in data['5m'][-10:]) / 10.0
 
-        vol_threshold = 1.2 if risk_key == 'LOW' else (1.15 if risk_key == 'MEDIUM' else 1.25)
+        vol_threshold = 1.2 if risk_key == 'LOW' else (1.15 if risk_key == 'MEDIUM' else 1.15)  # HIGH کمی آسان‌تر شد
         vol_ok = vol_5m >= vol_threshold * avg_vol_5m
 
         entry_cond = break_ok or (near_ok and risk_key != 'LOW')
@@ -131,7 +131,7 @@ def check_rules_for_level(analysis_data, risk_config, direction):
     elif risk_key == 'MEDIUM':
         rsi_condition = (rsi_count >= 3)
     else:  # HIGH
-        rsi_condition = (rsi_count >= 4 or extra_rsi >= 1)
+        rsi_condition = (rsi_count >= 3 or extra_rsi >= 1)   # کمی آسان‌تر شد
 
     if rsi_condition:
         passed_rules.append('RSI')
@@ -149,7 +149,7 @@ def check_rules_for_level(analysis_data, risk_config, direction):
     else:
         avg_hist_10 = 1e-6
 
-    multiplier = 1.2 if risk_key == 'LOW' else (1.15 if risk_key == 'MEDIUM' else 1.25)
+    multiplier = 1.2 if risk_key == 'LOW' else (1.15 if risk_key == 'MEDIUM' else 1.15)  # HIGH کمی آسان‌تر شد
 
     extra_macd = 0
     for h in hist_values[-3:]:
@@ -161,7 +161,7 @@ def check_rules_for_level(analysis_data, risk_config, direction):
     elif risk_key == 'MEDIUM':
         macd_condition = (macd_count >= 2 or extra_macd >= 1)
     else:  # HIGH
-        macd_condition = (macd_count >= 3 and extra_macd >= 1)
+        macd_condition = (macd_count >= 2 and extra_macd >= 1)   # کمی آسان‌تر شد
 
     if macd_condition:
         passed_rules.append('MACD')
@@ -177,9 +177,9 @@ def check_rules_for_level(analysis_data, risk_config, direction):
     if '15m' in data and len(data['15m']) >= 10:
         vol_15m = data['15m'][-1]['v']
         avg_vol_15m = sum(c['v'] for c in data['15m'][-10:]) / 10.0
-        vol_multiplier = 1.2 if risk_key == 'LOW' else (1.15 if risk_key == 'MEDIUM' else 1.25)
+        vol_multiplier = 1.2 if risk_key == 'LOW' else (1.15 if risk_key == 'MEDIUM' else 1.15)  # HIGH کمی آسان‌تر شد
         bs15 = body_strength(data['15m'][-1])
-        bs_thr = 0.55 if risk_key == 'LOW' else (0.45 if risk_key == 'MEDIUM' else 0.50)
+        bs_thr = 0.55 if risk_key == 'LOW' else (0.45 if risk_key == 'MEDIUM' else 0.45)  # HIGH کمی آسان‌تر شد
         if avg_vol_15m > 0 and vol_15m >= vol_multiplier * avg_vol_15m and bs15 > bs_thr:
             passed_rules.append('حجم + کندل 15m')
             reasons.append(f"حجم اسپایک (≥{vol_multiplier}x) + قدرت کندل 15m = {bs15:.2f}")
