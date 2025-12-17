@@ -178,4 +178,9 @@ if __name__ == "__main__":
     # برای تست روز جاری را بررسی کن
     target_date = now_tehran.strftime("%Y-%m-%d")
     update_csv_rows(target_date)
+    
+#if __name__ == "__main__":
+#    now_tehran = tehran_now()
+#    target_date = (now_tehran - timedelta(days=1)).strftime("%Y-%m-%d")
+#    update_csv_rows(target_date)
 
