@@ -191,6 +191,7 @@ async def process_symbol(symbol, data, session, index, total):
         logger.info("📭 هیچ سیگنال معتبری یافت نشد")
 
 # ========== تابع اصلی ==========
+# ========== تابع اصلی ==========
 async def main_async():
     start_time = time.perf_counter()
     server_start = datetime.now()
@@ -203,11 +204,15 @@ async def main_async():
     logger.info("=" * 80)
 
     async with aiohttp.ClientSession() as session:
-        tasks = [fetch_all_timeframes(session, sym) for sym in SYMBOLS]
-        results = await asyncio.gather(*tasks)
+        tasks_fetch = [fetch_all_timeframes(session, sym) for sym in SYMBOLS]
+        results = await asyncio.gather(*tasks_fetch)
 
-        for idx, (sym, data) in enumerate(results, 1):
+        # همه نمادها را موازی پردازش می‌کنیم
+        tasks_process = [
             process_symbol(sym, data, session, idx, len(SYMBOLS))
+            for idx, (sym, data) in enumerate(results, 1)
+        ]
+        await asyncio.gather(*tasks_process)
 
         duration = time.perf_counter() - start_time
         server_end = datetime.now()
@@ -226,6 +231,7 @@ async def main_async():
     logger.info(f"⏰ تهران: {tehran_end.strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info(f"⏱ مدت اجرا: {duration:.2f} ثانیه")
     logger.info("=" * 80)
+
 
 if __name__ == "__main__":
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
