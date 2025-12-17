@@ -54,6 +54,7 @@ def check_rules_for_level(analysis_data, risk_config, direction):
             struct_count_1h = 4
 
         struct_ok = hhhl_lhll_structure(candles_1h, count=struct_count_1h, direction=direction)
+
         if ema_ok and struct_ok:
             passed_rules.append('روند 1h')
             reasons.append(f"روند 1h: EMA همسو + ساختار {'HH/HL' if direction=='LONG' else 'LH/LL'} در {struct_count_1h} کندل")
@@ -62,6 +63,7 @@ def check_rules_for_level(analysis_data, risk_config, direction):
     if '30m' in data and '30m' in closes and len(closes['30m']) >= 21:
         ema21_30m = calculate_ema(closes['30m'], 21)
         price_ok = (direction == 'LONG' and last_close > ema21_30m) or (direction == 'SHORT' and last_close < ema21_30m)
+
         if risk_key == 'HIGH':
             if price_ok:
                 passed_rules.append('EMA21 30m')
@@ -72,20 +74,20 @@ def check_rules_for_level(analysis_data, risk_config, direction):
                 passed_rules.append('EMA21 + ساختار 30m')
                 reasons.append("قیمت همسو با EMA21 + ساختار در 30m")
 
-    # ========== Rule 4: قدرت کندل 15m (بر اساس ریسک) ==========
+    # ========== Rule 4: قدرت کندل 15m — تغییرات پیشنهادی (فقط برای MEDIUM و HIGH) ==========
     if '15m' in data and len(data['15m']) >= 1:
         bs15 = body_strength(data['15m'][-1])
         if risk_key == 'LOW':
             thr = 0.60
         elif risk_key == 'MEDIUM':
             thr = 0.45
-        else:
-            thr = 0.30
+        else:  # HIGH
+            thr = 0.35
         if bs15 > thr:
             passed_rules.append('کندل قوی 15m')
             reasons.append(f"قدرت کندل 15m = {bs15:.2f} (حد > {thr})")
 
-    # ========== Rule 5: ورود + حجم (منعطف برای HIGH) ==========
+    # ========== Rule 5: ورود + حجم — تغییرات پیشنهادی (فقط برای MEDIUM و HIGH) ==========
     vol_ok = False
     if '5m' in data and len(data['5m']) >= 10:
         sh, sl = swing_levels(data['5m'], lookback=10)
@@ -103,11 +105,17 @@ def check_rules_for_level(analysis_data, risk_config, direction):
             vol_15m = 0.0
             avg_vol_15m = 0.0
 
-        # آستانه حجم بر اساس ریسک
-        base_vol_mult = 1.3 if risk_key == 'LOW' else (1.2 if risk_key == 'MEDIUM' else 1.1)
+        # آستانه حجم بر اساس ریسک (فقط برای MEDIUM و HIGH تغییر)
+        if risk_key == 'LOW':
+            vol_threshold = 1.3
+        elif risk_key == 'MEDIUM':
+            vol_threshold = 1.2
+        else:  # HIGH
+            vol_threshold = 1.1
+
         # اگر کندل شکست 5m قوی باشد، برای HIGH حجم می‌تواند به 1.0x کاهش یابد
         bs_break_5m = body_strength(data['5m'][-1]) if len(data['5m']) else 0.0
-        effective_mult = 1.0 if (risk_key == 'HIGH' and bs_break_5m >= 0.4) else base_vol_mult
+        effective_mult = 1.0 if (risk_key == 'HIGH' and bs_break_5m >= 0.4) else vol_threshold
 
         vol_ok_5m = vol_5m >= effective_mult * avg_vol_5m
         vol_ok_15m = (avg_vol_15m > 0 and vol_15m >= effective_mult * avg_vol_15m)
@@ -117,6 +125,7 @@ def check_rules_for_level(analysis_data, risk_config, direction):
         if entry_cond and vol_ok:
             passed_rules.append('ورود + حجم')
             reasons.append(f"{'شکست' if break_ok else 'نزدیکی'} سطح + حجم ≥{effective_mult:.1f}x")
+
     # ========== Rule 6: RSI (شدت بر اساس ریسک) ==========
     req_rsi = risk_config['rules'].get('rsi_threshold_count', 3)
     rsi_ok, rsi_count, rsi_vals = rsi_count_ok(closes, direction, req_rsi)
@@ -127,15 +136,14 @@ def check_rules_for_level(analysis_data, risk_config, direction):
     elif risk_key == 'MEDIUM':
         rsi_condition = (rsi_count >= 3 and extra_rsi >= 1)
     else:
-       rsi_condition = rsi_count >= 2 or extra_rsi >= 1
+        rsi_condition = rsi_count >= 2 or extra_rsi >= 1
 
     # ========== Rule 7: MACD (شدت؛ شمارش پاک‌سازی‌شده) ==========
     req_macd = risk_config['rules'].get('macd_threshold_count', 3)
     macd_ok, macd_count, macd_vals = macd_count_ok(closes, direction, req_macd)
 
-    # فقط هیستوگرام‌ها
     hist_values = [v[1] for v in macd_vals.values() if v[1] is not None]
-    # میانگین امن 10 کندل اخیر (یا کل موجود)
+
     if len(hist_values) >= 10:
         avg_hist_10 = sum(abs(h) for h in hist_values[-10:]) / 10.0
     elif len(hist_values) > 0:
@@ -144,7 +152,7 @@ def check_rules_for_level(analysis_data, risk_config, direction):
         avg_hist_10 = 1e-6
 
     multiplier = 1.3 if risk_key == 'LOW' else (1.2 if risk_key == 'MEDIUM' else 1.1)
-    # فقط معیار میانگین را لحاظ کنیم (عدم شمارش دوگانه نسبت به کندل قبلی)
+
     extra_macd = 0
     for h in hist_values[-3:]:
         if (direction == 'LONG' and h > avg_hist_10 * multiplier) or (direction == 'SHORT' and h < -avg_hist_10 * multiplier):
@@ -189,13 +197,12 @@ def check_rules_for_level(analysis_data, risk_config, direction):
 
     # ========== تصمیم نهایی: آستانه‌ها ==========
     passed_count = len(passed_rules)
-
     if risk_key == 'LOW':
         decision = passed_count >= 7
     elif risk_key == 'MEDIUM':
         decision = passed_count >= 6
     else:
-        decision = passed_count >= 5  # کاهش برای دیدن فرصت‌های قیمت‌محور
+        decision = passed_count >= 5
 
     return {
         'passed': decision,
