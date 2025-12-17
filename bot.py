@@ -162,10 +162,17 @@ def decide_signal(results):
     scores.sort(key=lambda x: x[0], reverse=True)
     best_score, best = scores[0]
 
-    if len(scores) > 1 and best_score - scores[1][0] < 2:
-        return None
+    # اختلاف کمتر از 1 → باز هم انتخاب شود
+    if len(scores) > 1 and best_score - scores[1][0] < 1:
+        # اگر سطح میانی پاس شده باشد، آن را انتخاب کن
+        for s, r in scores:
+            if 'میانی' in r['risk_name']:
+                return r
+        # در غیر این صورت بهترین را برگردان
+        return best
 
     return best
+
 # ========== پردازش یک نماد ==========
 async def process_symbol(symbol, data, session, index, total):
     if not data:
