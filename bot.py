@@ -1,4 +1,3 @@
-# bot.py
 import aiohttp
 import asyncio
 import time
@@ -148,6 +147,25 @@ async def send_signal(symbol, analysis_data, check_result, direction):
     )
     logger.info(f"📝 سیگنال در CSV روزانه ذخیره شد: {symbol} {direction} {check_result['risk_name']}")
 
+# ========== انتخاب نهایی سیگنال ==========
+def decide_signal(results):
+    if not results:
+        return None
+
+    scores = []
+    for r in results:
+        base = r['passed_count']
+        weight = 3 if 'بالا' in r['risk_name'] else (2 if 'میانی' in r['risk_name'] else 1)
+        score = base + weight
+        scores.append((score, r))
+
+    scores.sort(key=lambda x: x[0], reverse=True)
+    best_score, best = scores[0]
+
+    if len(scores) > 1 and best_score - scores[1][0] < 2:
+        return None
+
+    return best
 # ========== پردازش یک نماد ==========
 async def process_symbol(symbol, data, session, index, total):
     if not data:
@@ -163,12 +181,10 @@ async def process_symbol(symbol, data, session, index, total):
     logger.info(f"💰 قیمت فعلی: {last_close:.4f}")
     logger.info("-" * 60)
 
-    logger.info("\n🔎 بررسی شرایط سیگنال...")
-    any_signal = False
     analysis = {'last_close': last_close, 'closes': closes, 'data': data}
 
-    tasks = []  # لیست تسک‌ها برای ارسال و ذخیره سیگنال
-
+    # جمع‌آوری نتایج همه سطح‌ها و جهت‌ها
+    results = []
     for direction in ['LONG', 'SHORT']:
         dir_text = "صعودی" if direction == 'LONG' else "نزولی"
         logger.info(f"\n➡️ بررسی جهت {dir_text}:")
@@ -177,15 +193,18 @@ async def process_symbol(symbol, data, session, index, total):
             reasons_text = ', '.join(res['reasons']) if res['reasons'] else ''
             logger.info(f"   سطح {risk['name']} → قوانین گذرانده: {res['passed_count']}/9 | دلایل: {reasons_text}")
             if res['passed']:
-                any_signal = True
-                logger.info(f"   ✅ تصمیم: سیگنال {risk['name']} {dir_text}")
-                tasks.append(send_signal(symbol, analysis, res, direction))
+                # جهت را در نتیجه ذخیره کنیم
+                res['direction'] = direction
+                results.append(res)
 
-    if tasks:
-        await asyncio.gather(*tasks)
+    # انتخاب نهایی
+    final = decide_signal(results)
+    if final:
+        logger.info(f"✅ تصمیم نهایی: {final['risk_name']} {final['direction']}")
+        await send_signal(symbol, analysis, final, final['direction'])
+    else:
+        logger.info("📭 هیچ سیگنال نهایی معتبر یافت نشد")
 
-    if not any_signal:
-        logger.info("📭 هیچ سیگنال معتبری یافت نشد")
 # ========== تابع اصلی ==========
 async def main_async():
     start_time = time.perf_counter()
