@@ -186,9 +186,6 @@ async def process_symbol(symbol, data, session, index, total):
 
     if not any_signal:
         logger.info("📭 هیچ سیگنال معتبری یافت نشد")
-
-
-# ========== تابع اصلی ==========
 # ========== تابع اصلی ==========
 async def main_async():
     start_time = time.perf_counter()
@@ -211,6 +208,13 @@ async def main_async():
             for idx, (sym, data) in enumerate(results, 1)
         ]
         await asyncio.gather(*tasks_process)
+
+        # اطمینان از نوشتن کامل لاگ‌ها
+        for handler in logger.handlers:
+            try:
+                handler.flush()
+            except Exception:
+                pass
 
         duration = time.perf_counter() - start_time
         server_end = datetime.now()
