@@ -37,3 +37,9 @@ jobs:
         with:
           name: bot-log
           path: bot_log.txt
+          
+      - name: Commit daily CSV
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Daytime: append new signals"
+          file_pattern: signals/*.csv
