@@ -149,7 +149,8 @@ async def send_signal(symbol, analysis_data, check_result, direction):
     logger.info(f"📝 سیگنال در CSV روزانه ذخیره شد: {symbol} {direction} {check_result['risk_name']}")
 
 # ========== پردازش یک نماد ==========
-def process_symbol(symbol, data, session, index, total):
+# ========== پردازش یک نماد ==========
+async def process_symbol(symbol, data, session, index, total):
     if not data:
         logger.info(f"\n[{index}/{total}] پردازش نماد {symbol} — ❌ داده دریافت نشد")
         return
@@ -167,6 +168,8 @@ def process_symbol(symbol, data, session, index, total):
     any_signal = False
     analysis = {'last_close': last_close, 'closes': closes, 'data': data}
 
+    tasks = []  # لیست تسک‌ها برای ذخیره‌سازی و ارسال تلگرام
+
     for direction in ['LONG', 'SHORT']:
         dir_text = "صعودی" if direction == 'LONG' else "نزولی"
         logger.info(f"\n➡️ بررسی جهت {dir_text}:")
@@ -177,7 +180,12 @@ def process_symbol(symbol, data, session, index, total):
             if res['passed']:
                 any_signal = True
                 logger.info(f"   ✅ تصمیم: سیگنال {risk['name']} {dir_text}")
-                asyncio.create_task(send_signal(symbol, analysis, res, direction))
+                # به جای create_task، تسک‌ها را جمع می‌کنیم
+                tasks.append(send_signal(symbol, analysis, res, direction))
+
+    if tasks:
+        # همه تسک‌ها را اجرا می‌کنیم و منتظر می‌مانیم تا کامل شوند
+        await asyncio.gather(*tasks)
 
     if not any_signal:
         logger.info("📭 هیچ سیگنال معتبری یافت نشد")
