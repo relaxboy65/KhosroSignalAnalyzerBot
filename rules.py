@@ -80,7 +80,7 @@ def check_rules_for_level(analysis_data, risk_config, direction):
         elif risk_key == 'MEDIUM':
             thr = 0.45
         else:
-            thr = 0.35
+            thr = 0.30
         if bs15 > thr:
             passed_rules.append('کندل قوی 15m')
             reasons.append(f"قدرت کندل 15m = {bs15:.2f} (حد > {thr})")
@@ -127,7 +127,7 @@ def check_rules_for_level(analysis_data, risk_config, direction):
     elif risk_key == 'MEDIUM':
         rsi_condition = (rsi_count >= 3 and extra_rsi >= 1)
     else:
-        rsi_condition = (rsi_count >= 2)
+       rsi_condition = rsi_count >= 2 or extra_rsi >= 1
 
     # ========== Rule 7: MACD (شدت؛ شمارش پاک‌سازی‌شده) ==========
     req_macd = risk_config['rules'].get('macd_threshold_count', 3)
