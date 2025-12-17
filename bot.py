@@ -13,6 +13,7 @@ from indicators import (
     swing_levels, calculate_atr
 )
 from rules import check_rules_for_level
+from signal_store import append_signal_row, compose_signal_source, tehran_time_str
 
 # ========== تنظیمات لاگ ==========
 logging.basicConfig(
@@ -76,7 +77,7 @@ async def fetch_all_timeframes(session, symbol):
             data[tf] = candles
     return symbol, data if data else None
 
-# ========== ارسال پیام به تلگرام (async) — فیکس خطای Session is closed ==========
+# ========== ارسال پیام به تلگرام ==========
 async def send_to_telegram(text):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"}
@@ -91,7 +92,7 @@ async def send_to_telegram(text):
         except Exception as e:
             logger.error(f"❌ خطا در ارسال به تلگرام: {e}")
 
-# ========== ارسال سیگنال ==========
+# ========== ارسال سیگنال + ذخیره در CSV ==========
 async def send_signal(symbol, analysis_data, check_result, direction):
     clean_symbol = symbol.replace('-USDT', '')
     dir_emoji = '🟢' if direction == 'LONG' else '🔴'
@@ -118,6 +119,7 @@ async def send_signal(symbol, analysis_data, check_result, direction):
 
     tehran_time = datetime.now(ZoneInfo("Asia/Tehran"))
 
+    # تلگرام
     msg = (
         f"{dir_emoji} {risk_symbol} <b>{check_result['risk_name']}</b> | {'لانگ' if direction=='LONG' else 'شورت'}\n\n"
         f"نماد: <code>{clean_symbol}</code>\n"
@@ -128,10 +130,25 @@ async def send_signal(symbol, analysis_data, check_result, direction):
         f"تارگت: <code>{target:.4f}</code>\n\n"
         f"⏰ {tehran_time.strftime('%Y-%m-%d %H:%M:%S')}"
     )
-
     await send_to_telegram(msg)
 
-# ========== پردازش یک نماد با لاگ کامل ==========
+    # ذخیره در CSV روزانه
+    issued_at_tehran = tehran_time_str(tehran_time)
+    signal_source = compose_signal_source(check_result, analysis_data, direction)
+    append_signal_row(
+        symbol=symbol,
+        direction=direction,
+        risk_level_name=check_result['risk_name'],
+        entry_price=last,
+        stop_loss=stop,
+        take_profit=target,
+        issued_at_tehran=issued_at_tehran,
+        signal_source=signal_source,
+        position_size_usd=10.0
+    )
+    logger.info(f"📝 سیگنال در CSV روزانه ذخیره شد: {symbol} {direction} {check_result['risk_name']}")
+
+# ========== پردازش یک نماد ==========
 def process_symbol(symbol, data, session, index, total):
     if not data:
         logger.info(f"\n[{index}/{total}] پردازش نماد {symbol} — ❌ داده دریافت نشد")
@@ -144,9 +161,6 @@ def process_symbol(symbol, data, session, index, total):
     logger.info(f"📊 گزارش کامل {symbol}:")
     logger.info("-" * 60)
     logger.info(f"💰 قیمت فعلی: {last_close:.4f}")
-
-    # EMA, RSI, MACD و قدرت کندل (همان قبل)
-
     logger.info("-" * 60)
 
     logger.info("\n🔎 بررسی شرایط سیگنال...")
@@ -163,7 +177,6 @@ def process_symbol(symbol, data, session, index, total):
             if res['passed']:
                 any_signal = True
                 logger.info(f"   ✅ تصمیم: سیگنال {risk['name']} {dir_text}")
-                # فیکس: session رو حذف کن
                 asyncio.create_task(send_signal(symbol, analysis, res, direction))
 
     if not any_signal:
@@ -188,7 +201,6 @@ async def main_async():
         for idx, (sym, data) in enumerate(results, 1):
             process_symbol(sym, data, session, idx, len(SYMBOLS))
 
-        # گزارش کلی به تلگرام — داخل async with
         duration = time.perf_counter() - start_time
         server_end = datetime.now()
         tehran_end = datetime.now(ZoneInfo("Asia/Tehran"))
