@@ -172,7 +172,10 @@ def update_csv_rows(date_str):
     print(f"✅ وضعیت سیگنال‌های {date_str} آپدیت شد: {path}")
     print("="*80)
 
+
 if __name__ == "__main__":
     now_tehran = tehran_now()
-    target_date = (now_tehran - timedelta(days=1)).strftime("%Y-%m-%d")
+    # برای تست روز جاری را بررسی کن
+    target_date = now_tehran.strftime("%Y-%m-%d")
     update_csv_rows(target_date)
+
