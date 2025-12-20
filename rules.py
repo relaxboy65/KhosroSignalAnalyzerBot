@@ -1,14 +1,13 @@
 # rules.py
 # نسخه نهایی و بهینه‌شده قوانین سیگنال‌دهی
-# تغییرات کلیدی نسبت به نسخه قبلی:
-# - حذف کامل شرط EMA در روند 4h و 1h برای سطوح ریسک میانی و بالا (فقط ساختار کندلی باقی مانده)
-# - برای ریسک کم همچنان EMA + ساختار حفظ شده (کیفیت بالا)
-# - EMA21 30m برای HIGH فقط قیمت همسو کافی است + فیلتر شیب EMA برای جلوگیری از ورود در بازار رنج
-# - Rule 5: ورود + حجم فقط با ری‌تست معتبر (نه ورود روی اسپایک مستقیم)
-# - Rule 6: RSI با شدت + جلوگیری از ورود در اشباع کوتاه‌مدت بدون ری‌تست
-# - Rule 7: MACD با شدت هیستوگرام + دروازه چند‌تایم‌فریم (۳۰m و ۱h همسو، ۴h غیرمخالف)
-# - قدرت کندل، حجم، RSI، MACD و عدم واگرایی با تنظیمات متعادل
-# - کامنت‌های فارسی و انگلیسی برای خوانایی بیشتر
+# تغییرات کلیدی:
+# - EMA در 4h و 1h برای MEDIUM/HIGH حذف شد، فقط ساختار کندلی باقی مانده
+# - EMA21 در 30m با فیلتر شیب برای جلوگیری از ورود در بازار رنج
+# - Rule 5: ورود + حجم فقط با ری‌تست معتبر
+# - Rule 6: RSI با شدت + جلوگیری از اشباع کوتاه‌مدت
+# - Rule 7: MACD با شدت هیستوگرام + دروازه چند‌تایم‌فریم
+# - آستانه HIGH از 5 به 4 کاهش یافت
+# - متن خروجی استانداردسازی شده برای جلوگیری از خطای تلگرام
 
 from indicators import (
     calculate_ema, calculate_rsi, calculate_macd, body_strength,
@@ -30,39 +29,34 @@ def check_rules_for_level(analysis_data, risk_config, direction):
 
     risk_key = risk_config['key']
 
-    # ========== Rule 1: روند 4h (فقط ساختار کندلی — EMA حذف شد برای HIGH و MEDIUM) ==========
+    # ========== Rule 1: روند 4h ==========
     if '4h' in data:
         candles_4h = data['4h']
         struct_count = 5 if risk_key == 'LOW' else 4 if risk_key == 'MEDIUM' else 3
         struct_ok = hhhl_lhll_structure(candles_4h, count=struct_count, direction=direction)
-
         if struct_ok:
             passed_rules.append('روند 4h')
             reasons.append(f"ساختار {'HH/HL' if direction == 'LONG' else 'LH/LL'} در {struct_count} کندل 4h")
 
-    # ========== Rule 2: روند 1h (فقط ساختار کندلی — EMA حذف شد برای HIGH و MEDIUM) ==========
+    # ========== Rule 2: روند 1h ==========
     if '1h' in data:
         candles_1h = data['1h']
         struct_count_1h = 4 if risk_key == 'LOW' else 4 if risk_key == 'MEDIUM' else 3
         struct_ok = hhhl_lhll_structure(candles_1h, count=struct_count_1h, direction=direction)
-
         if struct_ok:
             passed_rules.append('روند 1h')
             reasons.append(f"ساختار {'HH/HL' if direction == 'LONG' else 'LH/LL'} در {struct_count_1h} کندل 1h")
 
-    # ========== Rule 3: EMA21 + ساختار در 30m (برای HIGH فقط قیمت همسو کافی + فیلتر شیب EMA) ==========
+    # ========== Rule 3: EMA21 + ساختار در 30m ==========
     if '30m' in data and len(closes.get('30m', [])) >= 24:
         ema21_30m = calculate_ema(closes['30m'], 21)
         ema21_prev_30m = calculate_ema(closes['30m'][:-3], 21) if len(closes['30m']) >= 24 else None
         ema_slope_30m = None
         if ema21_prev_30m and ema21_prev_30m != 0:
             ema_slope_30m = (ema21_30m - ema21_prev_30m) / ema21_prev_30m
-
         slope_thr = 0.0015 if risk_key == 'LOW' else 0.0010 if risk_key == 'MEDIUM' else 0.0008
         slope_ok = (ema_slope_30m is None) or (abs(ema_slope_30m) >= slope_thr)
-
         price_ok = (direction == 'LONG' and last_close > ema21_30m) or (direction == 'SHORT' and last_close < ema21_30m)
-
         if risk_key == 'HIGH':
             if price_ok and slope_ok:
                 passed_rules.append('EMA21 30m')
@@ -81,29 +75,24 @@ def check_rules_for_level(analysis_data, risk_config, direction):
         elif risk_key == 'MEDIUM':
             thr = 0.45
         else:  # HIGH
-            thr = 0.40  # کمی سخت‌تر از 0.35 برای جلوگیری از ورود در کندل‌های ضعیف
+            thr = 0.40
         if bs15 > thr:
             passed_rules.append('کندل قوی 15m')
-            reasons.append(f"قدرت کندل 15m = {bs15:.2f} (حد > {thr})")
+            reasons.append(f"قدرت کندل 15m = {bs15:.2f} [حد > {thr}]")
 
-    # ========== Rule 5: ورود + حجم (فقط با ری‌تست معتبر) ==========
+    # ========== Rule 5: ورود + حجم ==========
     if '5m' in data and len(data['5m']) >= 12:
         sh, sl = swing_levels(data['5m'], lookback=10)
         level = sh if direction == 'LONG' else sl
-        break_ok = broke_level(last_close, level, direction)
         near_ok = is_near(last_close, level, 0.003)
-
         vol_5m = data['5m'][-1]['v']
         avg_vol_5m = sum(c['v'] for c in data['5m'][-10:]) / 10.0 if data['5m'] else 0
         vol_threshold = 1.3 if risk_key == 'LOW' else 1.2 if risk_key == 'MEDIUM' else 1.1
         vol_ok = avg_vol_5m > 0 and vol_5m >= vol_threshold * avg_vol_5m
-
-        # الزام ری‌تست: نزدیک سطح + حجم کمتر از اسپایک اخیر + کندل 5m با قدرت میانه
         last3 = data['5m'][-3:]
         max_spike_vol = max(c['v'] for c in last3)
         bs5 = body_strength(data['5m'][-1])
         retest_ok = near_ok and (vol_5m <= 0.9 * max_spike_vol) and (0.30 <= bs5 <= 0.85)
-
         if retest_ok and vol_ok:
             passed_rules.append('ورود + حجم')
             reasons.append(f"ری‌تست سطح + حجم ≥{vol_threshold}x + BS5={bs5:.2f}")
@@ -124,7 +113,7 @@ def check_rules_for_level(analysis_data, risk_config, direction):
 
     if rsi_condition:
         passed_rules.append('RSI')
-        reasons.append(f"RSI: {rsi_count}/5 همسو + {extra_rsi} خیلی قوی (>70/<30)")
+        reasons.append(f"RSI: {rsi_count}/5 همسو + {extra_rsi} خیلی قوی [آستانه 70/30]")
 
     # ========== Rule 7: MACD (با شدت هیستوگرام + دروازه چند‌تایم‌فریم) ==========
     req_macd = risk_config['rules'].get('macd_threshold_count', 3)
@@ -159,7 +148,7 @@ def check_rules_for_level(analysis_data, risk_config, direction):
     macd_condition = (macd_ok or extra_macd >= 1) and macd_hist_gate
     if macd_condition:
         passed_rules.append('MACD')
-        reasons.append(f"MACD: {macd_count}/5 همسو + {extra_macd} شدت قوی + دروازه هیستوگرام")
+        reasons.append(f"MACD: {macd_count}/5 همسو + {extra_macd} شدت قوی + گیت هیستوگرام")
 
     # ========== Rule 8: عدم واگرایی ==========
     if no_divergence(data, closes):
@@ -175,7 +164,7 @@ def check_rules_for_level(analysis_data, risk_config, direction):
         bs_thr = 0.6 if risk_key == 'LOW' else 0.45 if risk_key == 'MEDIUM' else 0.40
         if avg_vol_15m > 0 and vol_15m >= vol_multiplier * avg_vol_15m and bs15 > bs_thr:
             passed_rules.append('حجم + کندل 15m')
-            reasons.append(f"حجم اسپایک (≥{vol_multiplier}x) + قدرت کندل 15m = {bs15:.2f}")
+            reasons.append(f"حجم اسپایک [≥{vol_multiplier}x] + قدرت کندل 15m = {bs15:.2f}")
 
     # ========== تصمیم نهایی ==========
     passed_count = len(passed_rules)
