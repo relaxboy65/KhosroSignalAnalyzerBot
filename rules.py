@@ -321,7 +321,7 @@ def check_rules_ultimate_tp_maximizer(analysis_data, direction):
             passed_rules.append("روند 4h")
         elif range_4h:
             passed_rules.append("رنج سالم 4h")
-
+    # 55,50
     # --- Rule 4: کندل تصمیم (BS15) ---
     bs15 = body_strength(data['15m'][-1])
     if risk_name == "ریسک میانی":
