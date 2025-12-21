@@ -144,14 +144,13 @@ async def process_symbol(symbol, data, session, index, total):
                 results.append(res)
 
     # انتخاب بهترین سیگنال
-final = decide_signal(results)
-if final:
-    logger.info(f"✅ تصمیم نهایی: {final['risk_name']} {final['direction']}")
-    msg = await send_signal(symbol, analysis, final, final['direction'])
-    await send_to_telegram(msg)   # ارسال تلگرام اینجا انجام شود
-else:
-    logger.info("📭 هیچ سیگنال نهایی معتبر یافت نشد")
-
+    final = decide_signal(results)
+    if final:
+        logger.info(f"✅ تصمیم نهایی: {final['risk_name']} {final['direction']}")
+        msg = await send_signal(symbol, analysis, final, final['direction'])
+        await send_to_telegram(msg)   # ارسال تلگرام اینجا انجام می‌شود
+    else:
+        logger.info("📭 هیچ سیگنال نهایی معتبر یافت نشد")
 
 
 # ========== انتخاب نهایی سیگنال ==========
