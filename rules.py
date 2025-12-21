@@ -375,10 +375,7 @@ def check_rules_ultimate_tp_maximizer(analysis_data, direction):
         'macd_summary': macd_summary
     }
     
-    async def send_signal(symbol, analysis, final, direction):
-    """
-    ساخت متن گزارش و ارسال سیگنال نهایی
-    """
+async def send_signal(symbol, analysis, final, direction):
     status = "✅ سیگنال معتبر" if final['passed'] else "❌ سیگنال رد شد"
     rules_list = "\n".join([f"- {r}" for r in final['passed_rules']]) if final['passed_rules'] else "هیچ‌کدام"
     reasons_list = "\n".join([f"- {r}" for r in final['reasons']]) if final['reasons'] else "هیچ‌کدام"
@@ -394,11 +391,11 @@ def check_rules_ultimate_tp_maximizer(analysis_data, direction):
         f"📝 دلایل:\n{reasons_list}\n"
     )
 
-    # اینجا باید کد ارسال به تلگرام/کانال اضافه شود
-    # مثال:
-    # await telegram_bot.send_message(chat_id=CHANNEL_ID, text=msg)
+    # اینجا می‌توانی ارسال به تلگرام را اضافه کنی
+    # await send_to_telegram(msg)
 
     return msg
+
 
 # =========================================================
 # Fail helper
