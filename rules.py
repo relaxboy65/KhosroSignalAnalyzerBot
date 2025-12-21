@@ -229,10 +229,6 @@ def check_volume_dynamic(current_volume, avg_volume, symbol_volatility, timefram
 # MAIN RULES: ULTIMATE TP MAXIMIZER v5
 # =========================================================
 def check_rules_ultimate_tp_maximizer(analysis_data, direction):
-    """
-    قوانین نهایی برای حداکثر TP و حداقل استاپ
-    نسخه 5: اصلاح‌شده
-    """
     last_close = analysis_data.get('last_close')
     closes = analysis_data.get('closes', {})
     data = analysis_data.get('data', {})
@@ -241,6 +237,10 @@ def check_rules_ultimate_tp_maximizer(analysis_data, direction):
     reasons = []
     risk_name = "ریسک میانی"
     symbol = analysis_data.get('symbol', '')
+
+    # 🔹 اضافه کن: محاسبه نوسان نماد
+    symbol_volatility = calculate_symbol_volatility(data.get('30m', []))
+
 
     # --- Rule 1: قدرت واقعی ورود ---
     entry_power_ok, entry_msg = has_real_entry_power(data['15m'], direction)
