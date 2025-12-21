@@ -140,5 +140,12 @@ def fail(reason):
         'risk_name': 'ULTRA QUALITY FLEXIBLE'
     }
 
-# ========== Alias برای سازگاری با bot.py ==========
-check_rules_for_level = check_rules_ultra_quality_flexible
+# ========== Wrapper برای سازگاری با bot.py ==========
+def check_rules_for_level(analysis_data, risk, direction):
+    """
+    Wrapper برای فراخوانی نسخه ULTRA QUALITY FLEXIBLE
+    bot.py سه آرگومان می‌دهد (analysis, risk, direction)
+    ولی تابع اصلی فقط دو آرگومان می‌گیرد.
+    """
+    return check_rules_ultra_quality_flexible(analysis_data, direction)
+
