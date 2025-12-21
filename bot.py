@@ -90,99 +90,6 @@ async def send_to_telegram(text):
                     logger.warning(f"⚠️ خطا در ارسال تلگرام: {resp.status} {txt}")
         except Exception as e:
             logger.error(f"❌ خطا در ارسال به تلگرام: {e}")
-# ========== ارسال سیگنال + ذخیره در CSV ==========
-async def send_signal(symbol, analysis_data, check_result, direction):
-    clean_symbol = symbol.replace('-USDT', '')
-    dir_emoji = '🟢' if direction == 'LONG' else '🔴'
-    risk_symbol = '🦁' if 'کم' in check_result['risk_name'] else '🐺' if 'میانی' in check_result['risk_name'] else '🐒'
-
-    last = analysis_data['last_close']
-
-    # استاپ و تارگت دینامیک
-    atr_val = calculate_atr(analysis_data['data'].get('15m', []), period=14) if '15m' in analysis_data['data'] else None
-    if atr_val and atr_val > 0:
-        mult = 2.0 if 'کم' in check_result['risk_name'] else 1.5 if 'میانی' in check_result['risk_name'] else 1.0
-        rr = RISK_PARAMS.get('rr_target', 2.0)
-        if direction == 'LONG':
-            stop = last - mult * atr_val
-            target = last + rr * (last - stop)
-        else:
-            stop = last + mult * atr_val
-            target = last - rr * (stop - last)
-    else:
-        sh, sl = swing_levels(analysis_data['data'].get('5m', []), lookback=10)
-        level = sl if direction == 'LONG' else sh
-        stop = level or (last * 0.985 if direction == 'LONG' else last * 1.015)
-        target = last + RISK_PARAMS.get('rr_fallback', 2.0) * (last - stop) if direction == 'LONG' else last - RISK_PARAMS.get('rr_fallback', 2.0) * (stop - last)
-
-    tehran_time = datetime.now(ZoneInfo("Asia/Tehran"))
-
-    # لاگ کامل سیگنال
-    logger.info("📌 جزئیات سیگنال انتخاب‌شده:")
-    logger.info(f"   نماد: {symbol}")
-    logger.info(f"   جهت: {direction}")
-    logger.info(f"   سطح ریسک: {check_result['risk_name']}")
-    logger.info(f"   قیمت ورود: {last:.4f}")
-    logger.info(f"   استاپ‌لاس: {stop:.4f}")
-    logger.info(f"   تارگت: {target:.4f}")
-    logger.info(f"   📋 قوانین پاس‌شده: {', '.join(check_result['passed_rules']) if check_result['passed_rules'] else 'هیچ‌کدام'}")
-    logger.info(f"   📝 دلایل: {', '.join(check_result['reasons']) if check_result['reasons'] else '—'}")
-    logger.info("=" * 60)
-
-    # تلگرام
-    msg = (
-        f"{dir_emoji} {risk_symbol} <b>{check_result['risk_name']}</b> | {'لانگ' if direction=='LONG' else 'شورت'}\n\n"
-        f"نماد: <code>{clean_symbol}</code>\n"
-        f"قوانین گذرانده: <b>{check_result['passed_count']}/9</b>\n"
-        f"دلایل: {', '.join(check_result['reasons'])}\n\n"
-        f"ورود: <code>{last:.4f}</code>\n"
-        f"استاپ: <code>{stop:.4f}</code>\n"
-        f"تارگت: <code>{target:.4f}</code>\n\n"
-        f"⏰ {tehran_time.strftime('%Y-%m-%d %H:%M:%S')}"
-    )
-    await send_to_telegram(msg)
-
-    # ذخیره در CSV
-    issued_at_tehran = tehran_time_str(tehran_time)
-    signal_source = compose_signal_source(check_result, analysis_data, direction)
-    append_signal_row(
-        symbol=symbol,
-        direction=direction,
-        risk_level_name=check_result['risk_name'],
-        entry_price=last,
-        stop_loss=stop,
-        take_profit=target,
-        issued_at_tehran=issued_at_tehran,
-        signal_source=signal_source,
-        position_size_usd=10.0
-    )
-    logger.info(f"📝 سیگنال در CSV روزانه ذخیره شد: {symbol} {direction} {check_result['risk_name']}")
-
-# بقیه‌ی کد (decide_signal, process_symbol, main_async) بدون تغییر است
-# ========== انتخاب نهایی سیگنال ==========
-def decide_signal(results):
-    if not results:
-        return None
-
-    scores = []
-    for r in results:
-        base = r['passed_count']
-        weight = 3 if 'بالا' in r['risk_name'] else (2 if 'میانی' in r['risk_name'] else 1)
-        score = base + weight
-        scores.append((score, r))
-
-    scores.sort(key=lambda x: x[0], reverse=True)
-    best_score, best = scores[0]
-
-    # اختلاف کمتر از 1 → بررسی سطح میانی
-    if len(scores) > 1 and best_score - scores[1][0] < 1:
-        for s, r in scores:
-            if 'میانی' in r['risk_name']:
-                return r
-        return best
-
-    return best
-
 # ========== پردازش یک نماد ==========
 async def process_symbol(symbol, data, session, index, total):
     if not data:
@@ -193,10 +100,21 @@ async def process_symbol(symbol, data, session, index, total):
     last_close = closes['5m'][-1] if '5m' in closes else 0.0
 
     logger.info(f"\n[{index}/{total}] پردازش نماد {symbol}")
-    logger.info(f"📊 گزارش کامل {symbol}:")
+    logger.info("=" * 80)
+    logger.info(f"📊 گزارش اولیه {symbol}")
+    logger.info(f"💰 قیمت فعلی (5m): {last_close:.4f}")
     logger.info("-" * 60)
-    logger.info(f"💰 قیمت فعلی: {last_close:.4f}")
-    logger.info("-" * 60)
+
+    # چاپ اطلاعات هر تایم‌فریم
+    for tf, candles in data.items():
+        last_candle = candles[-1]
+        logger.info(f"⏱ تایم‌فریم {tf}:")
+        logger.info(f"   قیمت باز: {last_candle['o']:.4f}")
+        logger.info(f"   قیمت پایانی: {last_candle['c']:.4f}")
+        logger.info(f"   سقف: {last_candle['h']:.4f}")
+        logger.info(f"   کف: {last_candle['l']:.4f}")
+        logger.info(f"   حجم: {last_candle['v']:.2f}")
+        logger.info("-" * 40)
 
     analysis = {'last_close': last_close, 'closes': closes, 'data': data}
 
@@ -222,6 +140,29 @@ async def process_symbol(symbol, data, session, index, total):
         await send_signal(symbol, analysis, final, final['direction'])
     else:
         logger.info("📭 هیچ سیگنال نهایی معتبر یافت نشد")
+# ========== انتخاب نهایی سیگنال ==========
+def decide_signal(results):
+    if not results:
+        return None
+
+    scores = []
+    for r in results:
+        base = r['passed_count']
+        weight = 3 if 'بالا' in r['risk_name'] else (2 if 'میانی' in r['risk_name'] else 1)
+        score = base + weight
+        scores.append((score, r))
+
+    scores.sort(key=lambda x: x[0], reverse=True)
+    best_score, best = scores[0]
+
+    # اختلاف کمتر از 1 → بررسی سطح میانی
+    if len(scores) > 1 and best_score - scores[1][0] < 1:
+        for s, r in scores:
+            if 'میانی' in r['risk_name']:
+                return r
+        return best
+
+    return best
 
 # ========== تابع اصلی ==========
 async def main_async():
