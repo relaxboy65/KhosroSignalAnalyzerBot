@@ -11,12 +11,16 @@ import numpy as np
 # Helper: ساختار روند با تحمل خطا
 # =========================================================
 def structure_with_tolerance(candles, count, direction, tolerance=0.002):
-    """بررسی ساختار روند با تحمل خطا"""
     if not candles or len(candles) < count:
         return False
     try:
-        highs = [c[1] for c in candles[-count:]]
-        lows = [c[2] for c in candles[-count:]]
+        highs, lows = [], []
+        for c in candles[-count:]:
+            o, h, l, cl = get_prices(c)
+            if h is None or l is None:
+                return False
+            highs.append(h)
+            lows.append(l)
     except Exception:
         return False
 
@@ -43,12 +47,16 @@ def structure_with_tolerance(candles, count, direction, tolerance=0.002):
 # Helper: رنج سالم در 4h
 # =========================================================
 def is_healthy_range(candles, lookback=10, max_range_percent=0.008):
-    """بررسی رنج سالم در تایم‌فریم 4h"""
     if not candles or len(candles) < lookback:
         return False
     try:
-        highs = [c[1] for c in candles[-lookback:]]
-        lows = [c[2] for c in candles[-lookback:]]
+        highs, lows = [], []
+        for c in candles[-lookback:]:
+            o, h, l, cl = get_prices(c)
+            if h is None or l is None:
+                return False
+            highs.append(h)
+            lows.append(l)
     except Exception:
         return False
 
@@ -71,14 +79,39 @@ def has_real_entry_power(data_15m, direction):
     current_candle = data_15m[-1]
     prev_candle = data_15m[-2]
 
-    # استخراج قیمت‌ها بر اساس نوع داده
-    def get_prices(candle):
-        if isinstance(candle, dict):
-            return candle.get('open'), candle.get('high'), candle.get('low'), candle.get('close')
-        elif isinstance(candle, (list, tuple)) and len(candle) >= 4:
-            return candle[0], candle[1], candle[2], candle[3]
-        else:
-            return None, None, None, None
+    o_cur, h_cur, l_cur, c_cur = get_prices(current_candle)
+    o_prev, h_prev, l_prev, c_prev = get_prices(prev_candle)
+
+    if o_cur is None or c_cur is None or o_prev is None or c_prev is None:
+        return False, "ساختار کندل نامعتبر"
+
+    bs_current = body_strength(current_candle)
+    bs_prev = body_strength(prev_candle)
+
+    # کندل فعلی باید قوی باشد
+    if bs_current < 0.4:
+        return False, f"کندل فعلی ضعیف: {bs_current:.2f}"
+
+    # کندل قبلی نباید مخالف قوی باشد
+    if direction == 'LONG' and c_prev < o_prev:  # کندل نزولی
+        if bs_prev > 0.4:
+            return False, "کندل قبلی نزولی قوی"
+    elif direction == 'SHORT' and c_prev > o_prev:  # کندل صعودی
+        if bs_prev > 0.4:
+            return False, "کندل قبلی صعودی قوی"
+
+    return True, "قدرت ورود مناسب"
+
+# =========================================================
+# Helper: استخراج قیمت‌ها از کندل (سازگار با dict و list)
+# =========================================================
+def get_prices(candle):
+    if isinstance(candle, dict):
+        return candle.get('open'), candle.get('high'), candle.get('low'), candle.get('close')
+    elif isinstance(candle, (list, tuple)) and len(candle) >= 4:
+        return candle[0], candle[1], candle[2], candle[3]
+    else:
+        return None, None, None, None
 
     open_cur, high_cur, low_cur, close_cur = get_prices(current_candle)
     open_prev, high_prev, low_prev, close_prev = get_prices(prev_candle)
