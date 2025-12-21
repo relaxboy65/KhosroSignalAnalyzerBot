@@ -90,7 +90,6 @@ async def send_to_telegram(text):
                     logger.warning(f"⚠️ خطا در ارسال تلگرام: {resp.status} {txt}")
         except Exception as e:
             logger.error(f"❌ خطا در ارسال به تلگرام: {e}")
-
 # ========== ارسال سیگنال + ذخیره در CSV ==========
 async def send_signal(symbol, analysis_data, check_result, direction):
     clean_symbol = symbol.replace('-USDT', '')
@@ -102,7 +101,7 @@ async def send_signal(symbol, analysis_data, check_result, direction):
     # استاپ و تارگت دینامیک
     atr_val = calculate_atr(analysis_data['data'].get('15m', []), period=14) if '15m' in analysis_data['data'] else None
     if atr_val and atr_val > 0:
-        mult = RISK_PARAMS.get('atr_multiplier', 1.2)
+        mult = 2.0 if 'کم' in check_result['risk_name'] else 1.5 if 'میانی' in check_result['risk_name'] else 1.0
         rr = RISK_PARAMS.get('rr_target', 2.0)
         if direction == 'LONG':
             stop = last - mult * atr_val
@@ -118,6 +117,18 @@ async def send_signal(symbol, analysis_data, check_result, direction):
 
     tehran_time = datetime.now(ZoneInfo("Asia/Tehran"))
 
+    # لاگ کامل سیگنال
+    logger.info("📌 جزئیات سیگنال انتخاب‌شده:")
+    logger.info(f"   نماد: {symbol}")
+    logger.info(f"   جهت: {direction}")
+    logger.info(f"   سطح ریسک: {check_result['risk_name']}")
+    logger.info(f"   قیمت ورود: {last:.4f}")
+    logger.info(f"   استاپ‌لاس: {stop:.4f}")
+    logger.info(f"   تارگت: {target:.4f}")
+    logger.info(f"   📋 قوانین پاس‌شده: {', '.join(check_result['passed_rules']) if check_result['passed_rules'] else 'هیچ‌کدام'}")
+    logger.info(f"   📝 دلایل: {', '.join(check_result['reasons']) if check_result['reasons'] else '—'}")
+    logger.info("=" * 60)
+
     # تلگرام
     msg = (
         f"{dir_emoji} {risk_symbol} <b>{check_result['risk_name']}</b> | {'لانگ' if direction=='LONG' else 'شورت'}\n\n"
@@ -131,7 +142,7 @@ async def send_signal(symbol, analysis_data, check_result, direction):
     )
     await send_to_telegram(msg)
 
-    # ذخیره در CSV روزانه
+    # ذخیره در CSV
     issued_at_tehran = tehran_time_str(tehran_time)
     signal_source = compose_signal_source(check_result, analysis_data, direction)
     append_signal_row(
@@ -147,6 +158,7 @@ async def send_signal(symbol, analysis_data, check_result, direction):
     )
     logger.info(f"📝 سیگنال در CSV روزانه ذخیره شد: {symbol} {direction} {check_result['risk_name']}")
 
+# بقیه‌ی کد (decide_signal, process_symbol, main_async) بدون تغییر است
 # ========== انتخاب نهایی سیگنال ==========
 def decide_signal(results):
     if not results:
@@ -162,13 +174,11 @@ def decide_signal(results):
     scores.sort(key=lambda x: x[0], reverse=True)
     best_score, best = scores[0]
 
-    # اختلاف کمتر از 1 → باز هم انتخاب شود
+    # اختلاف کمتر از 1 → بررسی سطح میانی
     if len(scores) > 1 and best_score - scores[1][0] < 1:
-        # اگر سطح میانی پاس شده باشد، آن را انتخاب کن
         for s, r in scores:
             if 'میانی' in r['risk_name']:
                 return r
-        # در غیر این صورت بهترین را برگردان
         return best
 
     return best
@@ -190,21 +200,22 @@ async def process_symbol(symbol, data, session, index, total):
 
     analysis = {'last_close': last_close, 'closes': closes, 'data': data}
 
-    # جمع‌آوری نتایج همه سطح‌ها و جهت‌ها
     results = []
     for direction in ['LONG', 'SHORT']:
         dir_text = "صعودی" if direction == 'LONG' else "نزولی"
         logger.info(f"\n➡️ بررسی جهت {dir_text}:")
         for risk in RISK_LEVELS:
             res = check_rules_for_level(analysis, risk, direction)
-            reasons_text = ', '.join(res['reasons']) if res['reasons'] else ''
-            logger.info(f"   سطح {risk['name']} → قوانین گذرانده: {res['passed_count']}/9 | دلایل: {reasons_text}")
+            logger.info(f"   سطح {risk['name']} ({direction})")
+            logger.info(f"      ✅ وضعیت: {'پاس شد' if res['passed'] else 'رد شد'}")
+            logger.info(f"      📊 قوانین گذرانده: {res['passed_count']}/9")
+            logger.info(f"      📋 لیست قوانین: {', '.join(res['passed_rules']) if res['passed_rules'] else 'هیچ‌کدام'}")
+            logger.info(f"      📝 دلایل رد/قبول: {', '.join(res['reasons']) if res['reasons'] else '—'}")
+            logger.info("-" * 60)
             if res['passed']:
-                # جهت را در نتیجه ذخیره کنیم
                 res['direction'] = direction
                 results.append(res)
 
-    # انتخاب نهایی
     final = decide_signal(results)
     if final:
         logger.info(f"✅ تصمیم نهایی: {final['risk_name']} {final['direction']}")
@@ -228,14 +239,12 @@ async def main_async():
         tasks_fetch = [fetch_all_timeframes(session, sym) for sym in SYMBOLS]
         results = await asyncio.gather(*tasks_fetch)
 
-        # همه نمادها را موازی پردازش می‌کنیم
         tasks_process = [
             process_symbol(sym, data, session, idx, len(SYMBOLS))
             for idx, (sym, data) in enumerate(results, 1)
         ]
         await asyncio.gather(*tasks_process)
 
-        # اطمینان از نوشتن کامل لاگ‌ها
         for handler in logger.handlers:
             try:
                 handler.flush()
