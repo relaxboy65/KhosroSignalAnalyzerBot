@@ -376,31 +376,6 @@ def check_rules_ultimate_tp_maximizer(analysis_data, direction):
         'macd_summary': macd_summary
     }
     
-async def send_signal(symbol, analysis, final, direction):
-    """
-    ساخت متن گزارش و ارسال سیگنال نهایی به تلگرام
-    """
-    status = "✅ سیگنال معتبر" if final['passed'] else "❌ سیگنال رد شد"
-    rules_list = "\n".join([f"- {r}" for r in final['passed_rules']]) if final['passed_rules'] else "هیچ‌کدام"
-    reasons_list = "\n".join([f"- {r}" for r in final['reasons']]) if final['reasons'] else "هیچ‌کدام"
-
-    msg = (
-        f"📊 گزارش {symbol}\n"
-        f"📈 جهت: {direction}\n"
-        f"⚖️ سطح ریسک: {final['risk_name']}\n"
-        f"{status}\n"
-        f"-----------------------------\n"
-        f"📋 قوانین گذرانده ({final['passed_count']}):\n{rules_list}\n"
-        f"-----------------------------\n"
-        f"📝 دلایل:\n{reasons_list}\n"
-    )
-
-    # ارسال به تلگرام
-    await send_to_telegram(msg)
-
-    return msg
-
-
 
 # =========================================================
 # Fail helper
@@ -419,3 +394,25 @@ def fail(reason):
 # =========================================================
 def check_rules_for_level(analysis_data, risk, direction):
     return check_rules_ultimate_tp_maximizer(analysis_data, direction)
+
+
+async def send_signal(symbol, analysis, final, direction):
+    """
+    ساخت متن گزارش سیگنال نهایی (بدون ارسال تلگرام)
+    """
+    status = "✅ سیگنال معتبر" if final['passed'] else "❌ سیگنال رد شد"
+    rules_list = "\n".join([f"- {r}" for r in final['passed_rules']]) if final['passed_rules'] else "هیچ‌کدام"
+    reasons_list = "\n".join([f"- {r}" for r in final['reasons']]) if final['reasons'] else "هیچ‌کدام"
+
+    msg = (
+        f"📊 گزارش {symbol}\n"
+        f"📈 جهت: {direction}\n"
+        f"⚖️ سطح ریسک: {final['risk_name']}\n"
+        f"{status}\n"
+        f"-----------------------------\n"
+        f"📋 قوانین گذرانده ({final['passed_count']}):\n{rules_list}\n"
+        f"-----------------------------\n"
+        f"📝 دلایل:\n{reasons_list}\n"
+    )
+    return msg
+
