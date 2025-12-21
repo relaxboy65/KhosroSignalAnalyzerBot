@@ -12,18 +12,16 @@ import numpy as np
 # =========================================================
 def get_prices(candle):
     if isinstance(candle, dict):
-        o = candle.get('open') or candle.get('قیمت باز')
-        h = candle.get('high') or candle.get('سقف')
-        l = candle.get('low') or candle.get('کف')
-        c = candle.get('close') or candle.get('قیمت پایانی')
-        return o, h, l, c
-    elif isinstance(candle, (list, tuple)) and len(candle) >= 4:
-        return candle[0], candle[1], candle[2], candle[3]
-    elif hasattr(candle, 'open') and hasattr(candle, 'close'):
-        return candle.open, candle.high, candle.low, candle.close
+        o = candle.get('open') or candle.get('قیمت باز') or candle.get('o')
+        h = candle.get('high') or candle.get('سقف') or candle.get('h')
+        l = candle.get('low') or candle.get('کف') or candle.get('l')
+        c = candle.get('close') or candle.get('قیمت پایانی') or candle.get('c')
+        v = candle.get('volume') or candle.get('حجم') or candle.get('v')
+        return o, h, l, c, v
+    elif isinstance(candle, (list, tuple)) and len(candle) >= 5:
+        return candle[0], candle[1], candle[2], candle[3], candle[4]
     else:
-        return None, None, None, None
-
+        return None, None, None, None, None
 
 
 # =========================================================
