@@ -7,6 +7,24 @@ from indicators import (
 )
 import numpy as np
 
+def calculate_atr(candles, period=14):
+    """
+    محاسبه ATR ساده از لیست کندل‌ها
+    candles: لیست دیکشنری {'h': high, 'l': low, 'c': close}
+    """
+    if not candles or len(candles) < period:
+        return None
+
+    trs = []
+    for i in range(1, len(candles)):
+        high = candles[i]['h']
+        low = candles[i]['l']
+        prev_close = candles[i-1]['c']
+        tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
+        trs.append(tr)
+
+    return sum(trs[-period:]) / period if len(trs) >= period else None
+
 # =========================================================
 # Helper: استخراج قیمت‌ها از کندل (سازگار با dict و list)
 # =========================================================
