@@ -476,41 +476,41 @@ def check_rules_ultimate_tp_maximizer(analysis_data, direction):
     # محاسبه نوسان نماد
     symbol_volatility = calculate_symbol_volatility(data.get('30m', []))
     
-    # --- Rule 1: قدرت واقعی ورود ---
+        # --- Rule 1: قدرت واقعی ورود ---
     entry_power_ok, entry_msg = has_real_entry_power(data['15m'], direction)
     if not entry_power_ok:
         return fail(entry_msg)
     passed_rules.append("قدرت ورود")
-    
-# --- Rule 2: روند 1h ---
-if '1h' not in data or not structure_with_tolerance(data['1h'], 3, direction, tolerance=0.002):
-    # جایگزین: دو کندل قوی هم‌جهت
-    if len(data['1h']) >= 2:
-        last_candle = data['1h'][-1]
-        prev_candle = data['1h'][-2]
 
-        o_last, h_last, l_last, c_last = get_prices(last_candle)
-        o_prev, h_prev, l_prev, c_prev = get_prices(prev_candle)
+    # --- Rule 2: روند 1h ---
+    if '1h' not in data or not structure_with_tolerance(data['1h'], 3, direction, tolerance=0.002):
+        # جایگزین: دو کندل قوی هم‌جهت
+        if len(data['1h']) >= 2:
+            last_candle = data['1h'][-1]
+            prev_candle = data['1h'][-2]
 
-        bs1 = body_strength(last_candle)
-        bs2 = body_strength(prev_candle)
+            o_last, h_last, l_last, c_last = get_prices(last_candle)
+            o_prev, h_prev, l_prev, c_prev = get_prices(prev_candle)
 
-        if direction == 'LONG' and c_last > o_last and c_prev > o_prev:
-            if bs1 > 0.4 and bs2 > 0.4:
-                passed_rules.append("دو کندل 1h قوی")
+            bs1 = body_strength(last_candle)
+            bs2 = body_strength(prev_candle)
+
+            if direction == 'LONG' and c_last > o_last and c_prev > o_prev:
+                if bs1 > 0.4 and bs2 > 0.4:
+                    passed_rules.append("دو کندل 1h قوی")
+                else:
+                    return fail("روند 1h ضعیف")
+            elif direction == 'SHORT' and c_last < o_last and c_prev < o_prev:
+                if bs1 > 0.4 and bs2 > 0.4:
+                    passed_rules.append("دو کندل 1h قوی")
+                else:
+                    return fail("روند 1h ضعیف")
             else:
-                return fail("روند 1h ضعیف")
-        elif direction == 'SHORT' and c_last < o_last and c_prev < o_prev:
-            if bs1 > 0.4 and bs2 > 0.4:
-                passed_rules.append("دو کندل 1h قوی")
-            else:
-                return fail("روند 1h ضعیف")
+                return fail("روند 1h برقرار نیست")
         else:
             return fail("روند 1h برقرار نیست")
     else:
-        return fail("روند 1h برقرار نیست")
-else:
-    passed_rules.append("روند 1h معتبر")
+        passed_rules.append("روند 1h معتبر")
 
     
     # --- Rule 3: کانتکست 4h ---
