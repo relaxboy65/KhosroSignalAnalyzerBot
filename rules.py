@@ -325,10 +325,10 @@ def check_rules_ultimate_tp_maximizer(analysis_data, direction):
     # --- Rule 4: کندل تصمیم (BS15) ---
     bs15 = body_strength(data['15m'][-1])
     if risk_name == "ریسک میانی":
-        if bs15 < 0.1:
+        if bs15 < 0.01:
             return fail(f"کندل 15m ضعیف: {bs15:.2f}")
     else:
-        if bs15 < 0.1:
+        if bs15 < 0.01:
             return fail(f"کندل 15m ضعیف: {bs15:.2f}")
     passed_rules.append(f"کندل قوی ({bs15:.2f})")
 
