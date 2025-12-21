@@ -82,8 +82,7 @@ def macd_very_strong(macd_vals, direction):
 
     return True
 # =========================================================
-# Main Rules: ULTRA QUALITY FLEXIBLE
-# با دو سطح ریسک: میانی و بالا
+# Main Rules: ULTRA QUALITY FLEXIBLE + 4h fallback (نرم‌تر)
 # =========================================================
 def check_rules_ultra_quality_flexible(analysis_data, direction):
 
@@ -93,22 +92,19 @@ def check_rules_ultra_quality_flexible(analysis_data, direction):
 
     passed_rules = []
     reasons = []
-    risk_name = "ریسک میانی"  # پیش‌فرض
+    risk_name = "ریسک میانی"
 
-    # ================= Rule 1: 4h context =================
-    if '4h' not in data:
-        return fail("داده 4h وجود ندارد")
-
-    trend_4h = structure_with_tolerance(data['4h'], count=5, direction=direction, tolerance=0.002)
-    range_4h = is_healthy_range(data['4h'])
+    # --- Rule 1: 4h context ---
+    trend_4h = structure_with_tolerance(data.get('4h', []), 5, direction, tolerance=0.002)
+    range_4h = is_healthy_range(data.get('4h', []))
 
     if not (trend_4h or range_4h):
-        # انعطاف: اگر 4h نامعتبر است ولی 1h و 30m قوی هستند → سیگنال ریسک بالا
-        strong_1h = '1h' in data and structure_with_tolerance(data['1h'], count=4, direction=direction, tolerance=0.0015)
+        # fallback → ریسک بالا
+        strong_1h = '1h' in data and structure_with_tolerance(data['1h'], 4, direction, tolerance=0.0015)
         if strong_1h and '30m' in data:
             bs30 = body_strength(data['30m'][-1])
-            macd_ok, macd_count, macd_vals = macd_count_ok(closes, direction, required=3)
-            if bs30 >= 0.6 and macd_ok and macd_count >= 3:
+            macd_ok, macd_count, macd_vals = macd_count_ok(closes, direction, required=2)  # نرم‌تر
+            if bs30 >= 0.5 and macd_ok and macd_count >= 2:
                 risk_name = "ریسک بالا"
                 reasons.append("4h نامعتبر ولی 1h و 30m قوی → عبور با ریسک بالا")
                 passed_rules.append("Fallback: قدرت 1h + 30m")
@@ -119,34 +115,28 @@ def check_rules_ultra_quality_flexible(analysis_data, direction):
     else:
         passed_rules.append("کانتکست 4h معتبر (ترند یا تراکم سالم)")
 
-    # ================= Rule 2: 1h trend =================
-    if '1h' not in data or not structure_with_tolerance(data['1h'], count=4, direction=direction, tolerance=0.0015):
+    # --- Rule 2: 1h trend ---
+    if '1h' not in data or not structure_with_tolerance(data['1h'], 4, direction, tolerance=0.0015):
         return fail("روند 1h قفل نشده")
     passed_rules.append("روند 1h قفل‌شده")
 
-    # ================= Rule 3: EMA21 30m =================
-    if '30m' not in data or len(closes.get('30m', [])) < 30:
-        return fail("داده کافی 30m نیست")
-
+    # --- Rule 3: EMA21 30m ---
     ema21 = calculate_ema(closes['30m'], 21)
     ema21_prev = calculate_ema(closes['30m'][:-5], 21)
     if not ema21_prev:
         return fail("EMA قبلی نامعتبر است")
-
     ema_slope = (ema21 - ema21_prev) / ema21_prev
     if abs(ema_slope) < 0.0025:
         return fail("EMA21 30m شیب واقعی ندارد")
-
     if direction == 'LONG' and last_close <= ema21:
         return fail("قیمت زیر EMA21 است")
     if direction == 'SHORT' and last_close >= ema21:
         return fail("قیمت بالای EMA21 است")
-
     passed_rules.append("EMA21 30m با شیب واقعی")
 
-    # ================= Rule 4: Decision candle =================
+    # --- Rule 4: Decision candle ---
     bs30 = body_strength(data['30m'][-1])
-    macd_ok, macd_count, macd_vals = macd_count_ok(closes, direction, required=3)
+    macd_ok, macd_count, macd_vals = macd_count_ok(closes, direction, required=2)
     very_strong_macd = macd_very_strong(macd_vals, direction)
 
     if risk_name == "ریسک میانی":
@@ -157,11 +147,10 @@ def check_rules_ultra_quality_flexible(analysis_data, direction):
             return fail("کندل تصمیم خیلی ضعیف است")
     passed_rules.append("کندل تصمیم 30m")
 
-    # ================= Rule 5: RSI =================
-    rsi_ok, _, rsi_vals = rsi_count_ok(closes, direction, required=3)
+    # --- Rule 5: RSI ---
+    rsi_ok, _, rsi_vals = rsi_count_ok(closes, direction, required=2)
     if not rsi_ok:
         return fail("RSI هم‌جهت نیست")
-
     rsi_30 = rsi_vals.get('30m', 50)
     if risk_name == "ریسک میانی":
         if direction == 'LONG' and rsi_30 > 68:
@@ -173,12 +162,12 @@ def check_rules_ultra_quality_flexible(analysis_data, direction):
             reasons.append("RSI نزدیک اشباع ولی MACD قوی → عبور با ریسک بالا")
     passed_rules.append("RSI سالم")
 
-    # ================= Rule 6: MACD =================
+    # --- Rule 6: MACD ---
     if not macd_ok:
         return fail("MACD هم‌جهت نیست")
     passed_rules.append("MACD تثبیت‌شده")
 
-    # ================= Rule 7: No divergence =================
+    # --- Rule 7: No divergence ---
     if not no_divergence(data, closes):
         if risk_name == "ریسک بالا" and very_strong_macd:
             reasons.append("واگرایی خفیف ولی MACD قوی → عبور با ریسک بالا")
@@ -186,7 +175,6 @@ def check_rules_ultra_quality_flexible(analysis_data, direction):
             return fail("واگرایی مشاهده شد")
     passed_rules.append("بدون واگرایی")
 
-    # ================= Final =================
     return {
         'passed': True,
         'passed_rules': passed_rules,
