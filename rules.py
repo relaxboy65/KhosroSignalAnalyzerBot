@@ -8,6 +8,7 @@ from indicators import (
     no_divergence
 )
 import numpy as np
+from signal_store import append_signal_row, compose_signal_source, tehran_time_str
 
 # پارامترهای ریسک (برای محاسبات ATR و تارگت)
 RISK_PARAMS = {
@@ -467,6 +468,7 @@ async def send_signal(symbol, analysis_data, check_result, direction):
     # ذخیره در CSV
     issued_at_tehran = tehran_time_str(tehran_time)
     signal_source = compose_signal_source(check_result, analysis_data, direction)
+    
     append_signal_row(
         symbol=symbol,
         direction=direction,
@@ -478,6 +480,7 @@ async def send_signal(symbol, analysis_data, check_result, direction):
         signal_source=signal_source,
         position_size_usd=10.0
     )
+
 
     logger.info(f"📝 سیگنال در CSV روزانه ذخیره شد: {symbol} {direction} {check_result['risk_name']}")
 
