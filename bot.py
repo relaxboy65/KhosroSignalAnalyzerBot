@@ -5,6 +5,7 @@ import logging
 import sys
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from rules import check_rules_for_level, send_signal
 
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SYMBOLS, RISK_LEVELS, RISK_PARAMS
 from indicators import (
