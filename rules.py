@@ -481,9 +481,6 @@ async def send_signal(symbol, analysis_data, check_result, direction):
         position_size_usd=10.0
     )
 
-
-    logger.info(f"📝 سیگنال در CSV روزانه ذخیره شد: {symbol} {direction} {check_result['risk_name']}")
-
     # فقط متن پیام را برگردان
     return msg
 
