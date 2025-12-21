@@ -395,23 +395,64 @@ def check_rules_for_level(analysis_data, risk, direction):
     return check_rules_ultimate_tp_maximizer(analysis_data, direction)
 
 
-async def send_signal(symbol, analysis, final, direction):
-    """
-    ساخت متن گزارش سیگنال نهایی (بدون ارسال تلگرام)
-    """
-    status = "✅ سیگنال معتبر" if final['passed'] else "❌ سیگنال رد شد"
-    rules_list = "\n".join([f"- {r}" for r in final['passed_rules']]) if final['passed_rules'] else "هیچ‌کدام"
-    reasons_list = "\n".join([f"- {r}" for r in final['reasons']]) if final['reasons'] else "هیچ‌کدام"
+async def send_signal(symbol, analysis_data, check_result, direction):
+    clean_symbol = symbol.replace('-USDT', '')
+    dir_emoji = '🟢' if direction == 'LONG' else '🔴'
+    risk_symbol = '🦁' if 'کم' in check_result['risk_name'] else '🐺' if 'میانی' in check_result['risk_name'] else '🐒'
 
+    last = analysis_data['last_close']
+
+    # محاسبه استاپ و تارگت دینامیک
+    atr_val = calculate_atr(analysis_data['data'].get('15m', []), period=14) if '15m' in analysis_data['data'] else None
+    if atr_val and atr_val > 0:
+        mult = RISK_PARAMS.get('atr_multiplier', 1.2)
+        rr = RISK_PARAMS.get('rr_target', 2.0)
+        if direction == 'LONG':
+            stop = last - mult * atr_val
+            target = last + rr * (last - stop)
+        else:
+            stop = last + mult * atr_val
+            target = last - rr * (stop - last)
+    else:
+        sh, sl = swing_levels(analysis_data['data'].get('5m', []), lookback=10)
+        level = sl if direction == 'LONG' else sh
+        stop = level or (last * 0.985 if direction == 'LONG' else last * 1.015)
+        if direction == 'LONG':
+            target = last + RISK_PARAMS.get('rr_fallback', 2.0) * (last - stop)
+        else:
+            target = last - RISK_PARAMS.get('rr_fallback', 2.0) * (stop - last)
+
+    tehran_time = datetime.now(ZoneInfo("Asia/Tehran"))
+
+    # پیام تلگرام (همان استایل فعلی)
     msg = (
-        f"📊 گزارش {symbol}\n"
-        f"📈 جهت: {direction}\n"
-        f"⚖️ سطح ریسک: {final['risk_name']}\n"
-        f"{status}\n"
-        f"-----------------------------\n"
-        f"📋 قوانین گذرانده ({final['passed_count']}):\n{rules_list}\n"
-        f"-----------------------------\n"
-        f"📝 دلایل:\n{reasons_list}\n"
+        f"{dir_emoji} {risk_symbol} <b>{check_result['risk_name']}</b> | {'لانگ' if direction=='LONG' else 'شورت'}\n\n"
+        f"نماد: <code>{clean_symbol}</code>\n"
+        f"قوانین گذرانده: <b>{check_result['passed_count']}/9</b>\n"
+        f"دلایل: {', '.join(check_result['reasons']) if check_result['reasons'] else '—'}\n\n"
+        f"ورود: <code>{last:.4f}</code>\n"
+        f"استاپ: <code>{stop:.4f}</code>\n"
+        f"تارگت: <code>{target:.4f}</code>\n\n"
+        f"⏰ {tehran_time.strftime('%Y-%m-%d %H:%M:%S')}"
     )
-    return msg
+    await send_to_telegram(msg)
+
+    # ذخیره در CSV روزانه
+    issued_at_tehran = tehran_time_str(tehran_time)
+    signal_source = compose_signal_source(check_result, analysis_data, direction)
+
+    append_signal_row(
+        symbol=symbol,
+        direction=direction,
+        risk_level_name=check_result['risk_name'],
+        entry_price=last,
+        stop_loss=stop,
+        take_profit=target,
+        issued_at_tehran=issued_at_tehran,
+        signal_source=signal_source,
+        position_size_usd=10.0
+    )
+
+    logger.info(f"📝 سیگنال در CSV روزانه ذخیره شد: {symbol} {direction} {check_result['risk_name']}")
+
 
