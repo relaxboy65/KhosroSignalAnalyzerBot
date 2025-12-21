@@ -16,6 +16,10 @@ RISK_PARAMS = {
     "rr_fallback": 2.0       # نسبت ریسک به ریوارد در حالت fallback
 }
 
+
+def tehran_time_str(dt: datetime) -> str:
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
+
 def calculate_atr(candles, period=14):
     """
     محاسبه ATR ساده از لیست کندل‌ها
