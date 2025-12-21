@@ -97,15 +97,18 @@ async def process_symbol(symbol, data, session, index, total):
         logger.info(f"\n[{index}/{total}] پردازش نماد {symbol} — ❌ داده دریافت نشد")
         return
 
+    # استخراج قیمت‌ها
     closes = {tf: [c['c'] for c in data[tf]] for tf in data}
     last_close = closes['5m'][-1] if '5m' in closes else 0.0
 
+    # گزارش اولیه در لاگ
     logger.info(f"\n[{index}/{total}] پردازش نماد {symbol}")
     logger.info("=" * 80)
     logger.info(f"📊 گزارش اولیه {symbol}")
     logger.info(f"💰 قیمت فعلی (5m): {last_close:.4f}")
     logger.info("-" * 60)
 
+    # چاپ آخرین کندل هر تایم‌فریم
     for tf, candles in data.items():
         last_candle = candles[-1]
         logger.info(f"⏱ تایم‌فریم {tf}:")
@@ -116,7 +119,13 @@ async def process_symbol(symbol, data, session, index, total):
         logger.info(f"   حجم: {last_candle['v']:.2f}")
         logger.info("-" * 40)
 
-    analysis = {'last_close': last_close, 'closes': closes, 'data': data, 'symbol': symbol}
+    # آماده‌سازی داده برای قوانین
+    analysis = {
+        'last_close': last_close,
+        'closes': closes,
+        'data': data,
+        'symbol': symbol
+    }
 
     results = []
     for direction in ['LONG', 'SHORT']:
@@ -134,11 +143,15 @@ async def process_symbol(symbol, data, session, index, total):
                 res['direction'] = direction
                 results.append(res)
 
+    # انتخاب بهترین سیگنال
     final = decide_signal(results)
     if final:
         logger.info(f"✅ تصمیم نهایی: {final['risk_name']} {final['direction']}")
         msg = await send_signal(symbol, analysis, final, final['direction'])
-        await send_to_telegram(msg)   # ارسال به تلگرام اینجا انجام می‌شود
+        await send_to_telegram(msg)
+
+        # 🔹 ثبت در جدول سیگنال‌ها (CSV)
+        append_signal_row(symbol, final, tehran_time_str())
     else:
         logger.info("📭 هیچ سیگنال نهایی معتبر یافت نشد")
 
