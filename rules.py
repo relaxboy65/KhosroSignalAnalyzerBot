@@ -33,7 +33,7 @@ def structure_with_tolerance(candles, count, direction, tolerance=0.002):
     try:
         highs, lows = [], []
         for c in candles[-count:]:
-            o, h, l, cl = get_prices(c)
+            o, h, l, cl, v = get_prices(c)
             if h is None or l is None:
                 return False
             highs.append(h)
@@ -68,7 +68,7 @@ def is_healthy_range(candles, lookback=10, max_range_percent=0.008):
     try:
         highs, lows = [], []
         for c in candles[-lookback:]:
-            o, h, l, cl = get_prices(c)
+            o, h, l, cl, v = get_prices(c)
             if h is None or l is None:
                 return False
             highs.append(h)
@@ -94,8 +94,8 @@ def has_real_entry_power(data_15m, direction):
     current_candle = data_15m[-1]
     prev_candle = data_15m[-2]
 
-    o_cur, h_cur, l_cur, c_cur = get_prices(current_candle)
-    o_prev, h_prev, l_prev, c_prev = get_prices(prev_candle)
+    o_cur, h_cur, l_cur, c_cur, v_cur = get_prices(current_candle)
+    o_prev, h_prev, l_prev, c_prev, v_prev = get_prices(prev_candle)
 
     if o_cur is None or c_cur is None or o_prev is None or c_prev is None:
         return False, "ساختار کندل نامعتبر"
@@ -114,6 +114,7 @@ def has_real_entry_power(data_15m, direction):
             return False, "کندل قبلی صعودی قوی"
 
     return True, "قدرت ورود مناسب"
+
 # =========================================================
 # Helper: بررسی فاصله داینامیک EMA21
 # =========================================================
