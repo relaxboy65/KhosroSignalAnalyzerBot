@@ -1,4 +1,3 @@
-from bot import send_to_telegram # اضافه کن بالای فایل rules.py
 from indicators import (
     calculate_ema,
     body_strength,
