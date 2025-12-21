@@ -429,7 +429,7 @@ async def send_signal(symbol, analysis_data, check_result, direction):
 
     last = analysis_data['last_close']
 
-    # محاسبه استاپ و تارگت دینامیک
+    # محاسبه استاپ و تارگت (همان منطق قبلی)
     atr_val = calculate_atr(analysis_data['data'].get('15m', []), period=14) if '15m' in analysis_data['data'] else None
     if atr_val and atr_val > 0:
         mult = RISK_PARAMS.get('atr_multiplier', 1.2)
@@ -444,14 +444,11 @@ async def send_signal(symbol, analysis_data, check_result, direction):
         sh, sl = swing_levels(analysis_data['data'].get('5m', []), lookback=10)
         level = sl if direction == 'LONG' else sh
         stop = level or (last * 0.985 if direction == 'LONG' else last * 1.015)
-        if direction == 'LONG':
-            target = last + RISK_PARAMS.get('rr_fallback', 2.0) * (last - stop)
-        else:
-            target = last - RISK_PARAMS.get('rr_fallback', 2.0) * (stop - last)
+        target = last + RISK_PARAMS.get('rr_fallback', 2.0) * (last - stop) if direction == 'LONG' else last - RISK_PARAMS.get('rr_fallback', 2.0) * (stop - last)
 
     tehran_time = datetime.now(ZoneInfo("Asia/Tehran"))
 
-    # پیام تلگرام (همان استایل فعلی)
+    # متن پیام تلگرام (فقط ساخته می‌شود، ارسال نمی‌شود)
     msg = (
         f"{dir_emoji} {risk_symbol} <b>{check_result['risk_name']}</b> | {'لانگ' if direction=='LONG' else 'شورت'}\n\n"
         f"نماد: <code>{clean_symbol}</code>\n"
@@ -462,12 +459,10 @@ async def send_signal(symbol, analysis_data, check_result, direction):
         f"تارگت: <code>{target:.4f}</code>\n\n"
         f"⏰ {tehran_time.strftime('%Y-%m-%d %H:%M:%S')}"
     )
-    await send_to_telegram(msg)
 
-    # ذخیره در CSV روزانه
+    # ذخیره در CSV
     issued_at_tehran = tehran_time_str(tehran_time)
     signal_source = compose_signal_source(check_result, analysis_data, direction)
-
     append_signal_row(
         symbol=symbol,
         direction=direction,
@@ -481,5 +476,9 @@ async def send_signal(symbol, analysis_data, check_result, direction):
     )
 
     logger.info(f"📝 سیگنال در CSV روزانه ذخیره شد: {symbol} {direction} {check_result['risk_name']}")
+
+    # فقط متن پیام را برگردان
+    return msg
+
 
 
