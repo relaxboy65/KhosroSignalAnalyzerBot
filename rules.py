@@ -65,29 +65,44 @@ def is_healthy_range(candles, lookback=10, max_range_percent=0.008):
 # Helper: بررسی قدرت واقعی ورود
 # =========================================================
 def has_real_entry_power(data_15m, direction):
-    """بررسی قدرت واقعی ورود بر اساس کندل 15 دقیقه"""
     if not data_15m or len(data_15m) < 3:
         return False, "داده 15m ناکافی"
     
     current_candle = data_15m[-1]
     prev_candle = data_15m[-2]
-    
+
+    # استخراج قیمت‌ها بر اساس نوع داده
+    def get_prices(candle):
+        if isinstance(candle, dict):
+            return candle.get('open'), candle.get('high'), candle.get('low'), candle.get('close')
+        elif isinstance(candle, (list, tuple)) and len(candle) >= 4:
+            return candle[0], candle[1], candle[2], candle[3]
+        else:
+            return None, None, None, None
+
+    open_cur, high_cur, low_cur, close_cur = get_prices(current_candle)
+    open_prev, high_prev, low_prev, close_prev = get_prices(prev_candle)
+
+    if open_cur is None or close_cur is None:
+        return False, "ساختار کندل نامعتبر"
+
     bs_current = body_strength(current_candle)
     bs_prev = body_strength(prev_candle)
-    
+
     # کندل فعلی باید قوی باشد
     if bs_current < 0.4:
         return False, f"کندل فعلی ضعیف: {bs_current:.2f}"
-    
+
     # کندل قبلی نباید مخالف قوی باشد
-    if direction == 'LONG' and prev_candle[3] < prev_candle[0]:  # کندل نزولی
-        if bs_prev > 0.4:  # کندل نزولی قوی قبلی
+    if direction == 'LONG' and close_prev < open_prev:
+        if bs_prev > 0.4:
             return False, "کندل قبلی نزولی قوی"
-    elif direction == 'SHORT' and prev_candle[3] > prev_candle[0]:  # کندل صعودی
-        if bs_prev > 0.4:  # کندل صعودی قوی قبلی
+    elif direction == 'SHORT' and close_prev > open_prev:
+        if bs_prev > 0.4:
             return False, "کندل قبلی صعودی قوی"
-    
+
     return True, "قدرت ورود مناسب"
+
 
 
 # =========================================================
