@@ -136,9 +136,11 @@ def fail(reason):
     return {
         'passed': False,
         'passed_rules': [],
+        'passed_count': 0,
         'reasons': [reason],
         'risk_name': 'ULTRA QUALITY FLEXIBLE'
     }
+
 
 # ========== Wrapper برای سازگاری با bot.py ==========
 def check_rules_for_level(analysis_data, risk, direction):
