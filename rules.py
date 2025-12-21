@@ -481,31 +481,36 @@ def check_rules_ultimate_tp_maximizer(analysis_data, direction):
         return fail(entry_msg)
     passed_rules.append("قدرت ورود")
     
-    # --- Rule 2: روند 1h ---
-    if '1h' not in data or not structure_with_tolerance(data['1h'], 3, direction, tolerance=0.002):
-        # جایگزین: دو کندل قوی هم‌جهت
-        if len(data['1h']) >= 2:
-            last_candle = data['1h'][-1]
-            prev_candle = data['1h'][-2]
-            bs1 = body_strength(last_candle)
-            bs2 = body_strength(prev_candle)
-            
-            if direction == 'LONG' and last_candle[3] > last_candle[0] and prev_candle[3] > prev_candle[0]:
-                if bs1 > 0.4 and bs2 > 0.4:
-                    passed_rules.append("دو کندل 1h قوی")
-                else:
-                    return fail("روند 1h ضعیف")
-            elif direction == 'SHORT' and last_candle[3] < last_candle[0] and prev_candle[3] < prev_candle[0]:
-                if bs1 > 0.4 and bs2 > 0.4:
-                    passed_rules.append("دو کندل 1h قوی")
-                else:
-                    return fail("روند 1h ضعیف")
+# --- Rule 2: روند 1h ---
+if '1h' not in data or not structure_with_tolerance(data['1h'], 3, direction, tolerance=0.002):
+    # جایگزین: دو کندل قوی هم‌جهت
+    if len(data['1h']) >= 2:
+        last_candle = data['1h'][-1]
+        prev_candle = data['1h'][-2]
+
+        o_last, h_last, l_last, c_last = get_prices(last_candle)
+        o_prev, h_prev, l_prev, c_prev = get_prices(prev_candle)
+
+        bs1 = body_strength(last_candle)
+        bs2 = body_strength(prev_candle)
+
+        if direction == 'LONG' and c_last > o_last and c_prev > o_prev:
+            if bs1 > 0.4 and bs2 > 0.4:
+                passed_rules.append("دو کندل 1h قوی")
             else:
-                return fail("روند 1h برقرار نیست")
+                return fail("روند 1h ضعیف")
+        elif direction == 'SHORT' and c_last < o_last and c_prev < o_prev:
+            if bs1 > 0.4 and bs2 > 0.4:
+                passed_rules.append("دو کندل 1h قوی")
+            else:
+                return fail("روند 1h ضعیف")
         else:
             return fail("روند 1h برقرار نیست")
     else:
-        passed_rules.append("روند 1h")
+        return fail("روند 1h برقرار نیست")
+else:
+    passed_rules.append("روند 1h معتبر")
+
     
     # --- Rule 3: کانتکست 4h ---
     trend_4h = structure_with_tolerance(data.get('4h', []), 4, direction, tolerance=0.003)
