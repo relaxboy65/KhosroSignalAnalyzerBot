@@ -6,13 +6,19 @@ from indicators import (
 # ================= Helper: Structure with tolerance =================
 def structure_with_tolerance(candles, count, direction, tolerance=0.002):
     """
-    تشخیص HH/HL یا LH/LL با تحمل نوسان طبیعی بازار
+    تشخیص HH/HL یا LH/LL با تحمل نوسان
+    سازگار با candles به‌صورت tuple/list
+    فرض ساختار: (open, high, low, close, ...)
     """
+
     if len(candles) < count:
         return False
 
-    highs = [c['high'] for c in candles[-count:]]
-    lows  = [c['low']  for c in candles[-count:]]
+    try:
+        highs = [c[1] for c in candles[-count:]]  # high
+        lows  = [c[2] for c in candles[-count:]]  # low
+    except Exception:
+        return False  # دیتای خراب یا ساختار غیرمنتظره
 
     if direction == 'LONG':
         for i in range(1, count):
@@ -31,7 +37,6 @@ def structure_with_tolerance(candles, count, direction, tolerance=0.002):
         return True
 
     return False
-
 
 # ================= Helper: MACD very strong =================
 def macd_very_strong(macd_vals, direction):
