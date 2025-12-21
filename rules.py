@@ -7,6 +7,13 @@ from indicators import (
 )
 import numpy as np
 
+# پارامترهای ریسک (برای محاسبات ATR و تارگت)
+RISK_PARAMS = {
+    "atr_multiplier": 1.2,   # ضریب ATR برای محاسبه استاپ
+    "rr_target": 2.0,        # نسبت ریسک به ریوارد برای تارگت
+    "rr_fallback": 2.0       # نسبت ریسک به ریوارد در حالت fallback
+}
+
 def calculate_atr(candles, period=14):
     """
     محاسبه ATR ساده از لیست کندل‌ها
