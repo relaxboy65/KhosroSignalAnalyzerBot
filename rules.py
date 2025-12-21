@@ -253,8 +253,8 @@ def check_rules_ultimate_tp_maximizer(analysis_data, direction):
         if len(data['1h']) >= 2:
             last_candle = data['1h'][-1]
             prev_candle = data['1h'][-2]
-            o_last, h_last, l_last, c_last = get_prices(last_candle)
-            o_prev, h_prev, l_prev, c_prev = get_prices(prev_candle)
+            o_last, h_last, l_last, c_last, _ = get_prices(last_candle)
+            o_prev, h_prev, l_prev, c_prev, _ = get_prices(prev_candle)
             bs1 = body_strength(last_candle)
             bs2 = body_strength(prev_candle)
             if direction == 'LONG' and c_last > o_last and c_prev > o_prev:
