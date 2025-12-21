@@ -139,3 +139,6 @@ def fail(reason):
         'reasons': [reason],
         'risk_name': 'ULTRA QUALITY FLEXIBLE'
     }
+
+# ========== Alias برای سازگاری با bot.py ==========
+check_rules_for_level = check_rules_ultra_quality_flexible
