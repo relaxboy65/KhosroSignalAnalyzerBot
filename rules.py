@@ -1,3 +1,4 @@
+from bot import send_to_telegram # اضافه کن بالای فایل rules.py
 from indicators import (
     calculate_ema,
     body_strength,
@@ -376,6 +377,9 @@ def check_rules_ultimate_tp_maximizer(analysis_data, direction):
     }
     
 async def send_signal(symbol, analysis, final, direction):
+    """
+    ساخت متن گزارش و ارسال سیگنال نهایی به تلگرام
+    """
     status = "✅ سیگنال معتبر" if final['passed'] else "❌ سیگنال رد شد"
     rules_list = "\n".join([f"- {r}" for r in final['passed_rules']]) if final['passed_rules'] else "هیچ‌کدام"
     reasons_list = "\n".join([f"- {r}" for r in final['reasons']]) if final['reasons'] else "هیچ‌کدام"
@@ -391,10 +395,11 @@ async def send_signal(symbol, analysis, final, direction):
         f"📝 دلایل:\n{reasons_list}\n"
     )
 
-    # اینجا می‌توانی ارسال به تلگرام را اضافه کنی
-    # await send_to_telegram(msg)
+    # ارسال به تلگرام
+    await send_to_telegram(msg)
 
     return msg
+
 
 
 # =========================================================
