@@ -12,7 +12,6 @@ import numpy as np
 # =========================================================
 def get_prices(candle):
     if isinstance(candle, dict):
-        # پشتیبانی از کلیدهای انگلیسی و فارسی
         o = candle.get('open') or candle.get('قیمت باز')
         h = candle.get('high') or candle.get('سقف')
         l = candle.get('low') or candle.get('کف')
@@ -20,8 +19,11 @@ def get_prices(candle):
         return o, h, l, c
     elif isinstance(candle, (list, tuple)) and len(candle) >= 4:
         return candle[0], candle[1], candle[2], candle[3]
+    elif hasattr(candle, 'open') and hasattr(candle, 'close'):
+        return candle.open, candle.high, candle.low, candle.close
     else:
         return None, None, None, None
+
 
 
 # =========================================================
