@@ -12,11 +12,17 @@ import numpy as np
 # =========================================================
 def get_prices(candle):
     if isinstance(candle, dict):
-        return candle.get('open'), candle.get('high'), candle.get('low'), candle.get('close')
+        # پشتیبانی از کلیدهای انگلیسی و فارسی
+        o = candle.get('open') or candle.get('قیمت باز')
+        h = candle.get('high') or candle.get('سقف')
+        l = candle.get('low') or candle.get('کف')
+        c = candle.get('close') or candle.get('قیمت پایانی')
+        return o, h, l, c
     elif isinstance(candle, (list, tuple)) and len(candle) >= 4:
         return candle[0], candle[1], candle[2], candle[3]
     else:
         return None, None, None, None
+
 
 # =========================================================
 # Helper: ساختار روند با تحمل خطا
