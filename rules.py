@@ -113,6 +113,7 @@ def get_prices(candle):
     else:
         return None, None, None, None
 
+
     open_cur, high_cur, low_cur, close_cur = get_prices(current_candle)
     open_prev, high_prev, low_prev, close_prev = get_prices(prev_candle)
 
