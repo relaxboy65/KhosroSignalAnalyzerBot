@@ -229,16 +229,23 @@ async def process_symbol(symbol, data, session, index, total):
             divergence_detected=False
         )
         if signal_obj:
+            emoji_dir = "🟢" if final["direction"] == "LONG" else "🔴"
+            emoji_risk = "🐣" if final["risk_key"] == "LOW" else ("🐒" if final["risk_key"] == "MEDIUM" else "🦍")
+        
             msg = (
-                f"📢 سیگنال جدید {symbol}\n"
-                f"جهت: {final['direction']} | ریسک: {final['risk_name']}\n"
-                f"قیمت ورود: {signal_obj['price']:.4f}\n"
-                f"استاپ: {signal_obj['stop_loss']:.4f}\n"
-                f"تارگت: {signal_obj['take_profit']:.4f}\n"
-                f"زمان: {signal_obj['time']}\n"
-                f"منبع: {signal_obj['signal_source']}\n"
+                f"{emoji_dir} {emoji_risk} ریسک {final['risk_name']} | "
+                f"{'لانگ' if final['direction']=='LONG' else 'شورت'}\n"
+                f"نماد:\n{symbol}\n"
+                f"قوانین گذرانده: {final['passed_count']}/9\n"
+                f"دلایل: {', '.join(final['reasons'])}\n"
+                f"ورود:\n{signal_obj['price']:.4f}\n"
+                f"استاپ:\n{signal_obj['stop_loss']:.4f}\n"
+                f"تارگت:\n{signal_obj['take_profit']:.4f}\n"
+                f"⏰ {signal_obj['time']}"
             )
+        
             await send_to_telegram(msg)
+
 
 
     else:
