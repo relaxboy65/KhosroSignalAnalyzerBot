@@ -163,11 +163,11 @@ def generate_signal(
     check_result=None,
     analysis_data=None
 ):
-    # 🕒 زمان تهران
+    # زمان تهران
     tehran_now = datetime.now(ZoneInfo("Asia/Tehran"))
     time_str = tehran_time_str(tehran_now)
 
-    # 📊 محاسبه استاپ و تارگت بر اساس ATR
+    # محاسبه استاپ و تارگت
     atr_mult = RISK_PARAMS.get("atr_multiplier", 1.2)
     rr_target = RISK_PARAMS.get("rr_target", 2.0)
 
@@ -178,21 +178,17 @@ def generate_signal(
         stop_loss = price_30m + atr_val_30m * atr_mult
         take_profit = price_30m - (stop_loss - price_30m) * rr_target
 
-    # 📊 اطمینان از اینکه MACD هیستوگرام عدد است
+    # MACD هیستوگرام
     if isinstance(hist_30m, list):
         hist_30m = hist_30m[-1] if hist_30m else 0.0
 
-    # 📊 ساخت منبع سیگنال کامل
+    # ساخت رشته کامل برای CSV
     if check_result and analysis_data:
         signal_source = compose_signal_source(check_result, analysis_data, direction)
     else:
-        # حالت fallback ساده
-        signal_source = (
-            f"EMA21={ema21_30m:.2f}, EMA55={ema55_30m:.2f}, "
-            f"RSI30m={rsi_30m:.2f}, MACD_hist={hist_30m:.4f}"
-        )
+        signal_source = "NA"
 
-    # ذخیره در CSV با همه ستون‌ها
+    # ذخیره در CSV
     append_signal_row(
         symbol=symbol,
         direction=direction,
@@ -205,7 +201,7 @@ def generate_signal(
         position_size_usd=10.0
     )
 
-    # برگرداندن دیکشنری سیگنال برای استفاده در تلگرام یا لاگ
+    # خروجی برای تلگرام
     return {
         "symbol": symbol,
         "direction": direction,
@@ -216,4 +212,5 @@ def generate_signal(
         "time": time_str,
         "signal_source": signal_source
     }
+
 
