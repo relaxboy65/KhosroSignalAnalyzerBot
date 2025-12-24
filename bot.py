@@ -139,6 +139,7 @@ async def process_symbol(symbol, data, session, index, total):
             else:
                 macd_hist_30m = 0.0
 
+
             rsi_30m = calculate_rsi(closes['30m'])
 
             rule_results, passed_count = evaluate_rules(
