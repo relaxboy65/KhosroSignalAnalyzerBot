@@ -115,7 +115,7 @@ async def process_symbol(symbol, data, session, index, total):
         dir_text = "صعودی" if direction == 'LONG' else "نزولی"
         logger.info(f"\n➡️ بررسی جهت {dir_text}:")
         for risk in RISK_LEVELS:
-            # توجه: calculate_ema خروجی float دارد، پس [-1] حذف شد
+            # EMA و RSI خروجی float دارند → بدون [-1]
             ema21_30m = calculate_ema(closes['30m'], 21)
             ema8_30m = calculate_ema(closes['30m'], 8)
             ema55_30m = calculate_ema(closes['30m'], 55)
@@ -124,9 +124,19 @@ async def process_symbol(symbol, data, session, index, total):
             ema21_4h = calculate_ema(closes['4h'], 21)
             ema55_4h = calculate_ema(closes['4h'], 55)
 
-            macd_hist_30m = calculate_macd(closes['30m'])[2]  # اگر خروجی float است، بدون [-1]
+            # MACD می‌تواند dict یا tuple باشد
+            macd_data = calculate_macd(closes['30m'])
+            if isinstance(macd_data, tuple) and len(macd_data) == 3:
+                _, _, hist = macd_data
+                macd_hist_30m = hist[-1] if isinstance(hist, list) else hist
+            elif isinstance(macd_data, dict):
+                hist = macd_data.get("hist", [])
+                macd_hist_30m = hist[-1] if isinstance(hist, list) and hist else hist
+            else:
+                macd_hist_30m = 0.0
 
-            rsi_30m = calculate_rsi(closes['30m'])  # اگر خروجی float است، بدون [-1]
+            # RSI خروجی float دارد
+            rsi_30m = calculate_rsi(closes['30m'])
 
             rule_results, passed_count = evaluate_rules(
                 symbol=symbol,
