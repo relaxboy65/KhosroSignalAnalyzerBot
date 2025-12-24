@@ -145,7 +145,7 @@ async def process_symbol(symbol, data, session, index, total):
                 symbol=symbol,
                 direction=direction,
                 risk=risk_key,        # اینجا کلید رشته‌ای پاس داده می‌شود
-                rules=risk_rules,     # قوانین اختصاصی سطح ریسک
+                risk_rules=risk_rules, # ← اصلاح شد
                 price_30m=last_close,
                 open_15m=data['15m'][-1]['o'],
                 close_15m=data['15m'][-1]['c'],
