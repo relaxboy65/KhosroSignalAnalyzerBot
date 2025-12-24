@@ -147,11 +147,11 @@ def generate_signal(
     ema21_30m: float, ema55_30m: float, ema8_30m: float,
     ema21_1h: float, ema55_1h: float,
     ema21_4h: float, ema55_4h: float,
-    macd_line_5m: float, hist_5m: float,
-    macd_line_15m: float, hist_15m: float,
-    macd_line_30m: float, hist_30m: float,
-    macd_line_1h: float, hist_1h: float,
-    macd_line_4h: float, hist_4h: float,
+    macd_line_5m: float, hist_5m,
+    macd_line_15m: float, hist_15m,
+    macd_line_30m: float, hist_30m,
+    macd_line_1h: float, hist_1h,
+    macd_line_4h: float, hist_4h,
     rsi_5m: float, rsi_15m: float, rsi_30m: float, rsi_1h: float, rsi_4h: float,
     atr_val_30m: float,
     curr_vol: float,
@@ -173,8 +173,15 @@ def generate_signal(
         stop_loss = price_30m + atr_val_30m * atr_mult
         take_profit = price_30m - (stop_loss - price_30m) * rr_target
 
+    # 📊 اطمینان از اینکه MACD هیستوگرام عدد است
+    if isinstance(hist_30m, list):
+        hist_30m = hist_30m[-1] if hist_30m else 0.0
+
     # 📊 ساخت منبع سیگنال (خلاصه اندیکاتورها)
-    signal_source = f"EMA21={ema21_30m:.2f}, EMA55={ema55_30m:.2f}, RSI30m={rsi_30m:.2f}, MACD_hist={hist_30m:.4f}"
+    signal_source = (
+        f"EMA21={ema21_30m:.2f}, EMA55={ema55_30m:.2f}, "
+        f"RSI30m={rsi_30m:.2f}, MACD_hist={hist_30m:.4f}"
+    )
 
     # ذخیره در CSV با همه ستون‌ها
     append_signal_row(
@@ -200,4 +207,3 @@ def generate_signal(
         "time": time_str,
         "signal_source": signal_source
     }
-
