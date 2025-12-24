@@ -133,6 +133,11 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from signal_store import append_signal_row, tehran_time_str
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+from config import RISK_PARAMS
+from signal_store import append_signal_row, tehran_time_str
+
 def generate_signal(
     symbol: str,
     direction: str,
@@ -153,37 +158,46 @@ def generate_signal(
     avg_vol_30m: float,
     divergence_detected: bool
 ):
-    """
-    تولید سیگنال نهایی بر اساس نتایج قوانین و سطح ریسک انتخاب‌شده.
-    """
-
     # 🕒 زمان تهران
     tehran_now = datetime.now(ZoneInfo("Asia/Tehran"))
     time_str = tehran_time_str(tehran_now)
 
-    # 📊 ساختار سیگنال
-    signal = {
+    # 📊 محاسبه استاپ و تارگت بر اساس ATR
+    atr_mult = RISK_PARAMS.get("atr_multiplier", 1.2)
+    rr_target = RISK_PARAMS.get("rr_target", 2.0)
+
+    if direction == "LONG":
+        stop_loss = price_30m - atr_val_30m * atr_mult
+        take_profit = price_30m + (price_30m - stop_loss) * rr_target
+    else:
+        stop_loss = price_30m + atr_val_30m * atr_mult
+        take_profit = price_30m - (stop_loss - price_30m) * rr_target
+
+    # 📊 ساخت منبع سیگنال (خلاصه اندیکاتورها)
+    signal_source = f"EMA21={ema21_30m:.2f}, EMA55={ema55_30m:.2f}, RSI30m={rsi_30m:.2f}, MACD_hist={hist_30m:.4f}"
+
+    # ذخیره در CSV با همه ستون‌ها
+    append_signal_row(
+        symbol=symbol,
+        direction=direction,
+        risk_level_name=prefer_risk,
+        entry_price=price_30m,
+        stop_loss=stop_loss,
+        take_profit=take_profit,
+        issued_at_tehran=time_str,
+        signal_source=signal_source,
+        position_size_usd=10.0
+    )
+
+    # برگرداندن دیکشنری سیگنال برای استفاده در تلگرام یا لاگ
+    return {
         "symbol": symbol,
         "direction": direction,
         "risk": prefer_risk,
         "price": price_30m,
+        "stop_loss": stop_loss,
+        "take_profit": take_profit,
         "time": time_str,
-        "ema21_30m": ema21_30m,
-        "ema55_30m": ema55_30m,
-        "ema8_30m": ema8_30m,
-        "ema21_1h": ema21_1h,
-        "ema55_1h": ema55_1h,
-        "ema21_4h": ema21_4h,
-        "ema55_4h": ema55_4h,
-        "macd_hist_30m": hist_30m,
-        "rsi_30m": rsi_30m,
-        "atr_val_30m": atr_val_30m,
-        "curr_vol": curr_vol,
-        "avg_vol_30m": avg_vol_30m,
-        "divergence": divergence_detected
+        "signal_source": signal_source
     }
 
-    # ذخیره سیگنال در فایل/دیتابیس
-    append_signal_row(signal)
-
-    return signal
