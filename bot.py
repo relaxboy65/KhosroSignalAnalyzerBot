@@ -96,58 +96,103 @@ async def process_symbol(symbol, data, session, index, total):
         logger.info(f"\n[{index}/{total}] پردازش نماد {symbol} — ❌ داده دریافت نشد")
         return
 
-    # استخراج قیمت‌ها
     closes = {tf: [c['c'] for c in data[tf]] for tf in data}
     last_close = closes['5m'][-1] if '5m' in closes else 0.0
 
-    # گزارش اولیه در لاگ
     logger.info(f"\n[{index}/{total}] پردازش نماد {symbol}")
     logger.info("=" * 80)
     logger.info(f"📊 گزارش اولیه {symbol}")
     logger.info(f"💰 قیمت فعلی (5m): {last_close:.4f}")
     logger.info("-" * 60)
 
-    # چاپ آخرین کندل هر تایم‌فریم
     for tf, candles in data.items():
         last_candle = candles[-1]
-        logger.info(f"⏱ تایم‌فریم {tf}:")
-        logger.info(f"   قیمت باز: {last_candle['o']:.4f}")
-        logger.info(f"   قیمت پایانی: {last_candle['c']:.4f}")
-        logger.info(f"   سقف: {last_candle['h']:.4f}")
-        logger.info(f"   کف: {last_candle['l']:.4f}")
-        logger.info(f"   حجم: {last_candle['v']:.2f}")
-        logger.info("-" * 40)
-
-    # آماده‌سازی داده برای قوانین
-    analysis = {
-        'last_close': last_close,
-        'closes': closes,
-        'data': data,
-        'symbol': symbol
-    }
+        logger.info(f"⏱ تایم‌فریم {tf}: o={last_candle['o']:.4f}, c={last_candle['c']:.4f}, h={last_candle['h']:.4f}, l={last_candle['l']:.4f}, v={last_candle['v']:.2f}")
 
     results = []
     for direction in ['LONG', 'SHORT']:
         dir_text = "صعودی" if direction == 'LONG' else "نزولی"
         logger.info(f"\n➡️ بررسی جهت {dir_text}:")
         for risk in RISK_LEVELS:
-            res = check_rules_for_level(analysis, risk, direction)
+            # فراخوانی evaluate_rules
+            rule_results, passed_count = evaluate_rules(
+                symbol=symbol,
+                direction=direction,
+                risk=risk,
+                price_30m=last_close,
+                open_15m=data['15m'][-1]['o'],
+                close_15m=data['15m'][-1]['c'],
+                high_15m=data['15m'][-1]['h'],
+                low_15m=data['15m'][-1]['l'],
+                ema21_30m=calculate_ema(closes['30m'], 21)[-1],
+                ema8_30m=calculate_ema(closes['30m'], 8)[-1],
+                ema21_1h=calculate_ema(closes['1h'], 21)[-1],
+                ema55_1h=calculate_ema(closes['1h'], 55)[-1],
+                ema21_4h=calculate_ema(closes['4h'], 21)[-1],
+                ema55_4h=calculate_ema(closes['4h'], 55)[-1],
+                macd_hist_30m=calculate_macd(closes['30m'])[2][-1],
+                rsi_30m=calculate_rsi(closes['30m'])[-1],
+                vol_spike_factor=1.0,  # یا محاسبه حجم واقعی
+                divergence_detected=False
+            )
+
+            res = {
+                'passed': passed_count >= 5,
+                'passed_count': passed_count,
+                'passed_rules': [r.name for r in rule_results if r.passed],
+                'reasons': [r.detail for r in rule_results],
+                'risk_name': risk['name'],
+                'risk': risk
+            }
+
             logger.info(f"   سطح {risk['name']} ({direction})")
             logger.info(f"      ✅ وضعیت: {'پاس شد' if res['passed'] else 'رد شد'}")
             logger.info(f"      📊 قوانین گذرانده: {res['passed_count']}/9")
             logger.info(f"      📋 لیست قوانین: {', '.join(res['passed_rules']) if res['passed_rules'] else 'هیچ‌کدام'}")
-            logger.info(f"      📝 دلایل رد/قبول: {', '.join(res['reasons']) if res['reasons'] else '—'}")
+            logger.info(f"      📝 دلایل: {', '.join(res['reasons']) if res['reasons'] else '—'}")
             logger.info("-" * 60)
+
             if res['passed']:
                 res['direction'] = direction
                 results.append(res)
 
-    # انتخاب بهترین سیگنال
     final = decide_signal(results)
     if final:
         logger.info(f"✅ تصمیم نهایی: {final['risk_name']} {final['direction']}")
-        msg = await send_signal(symbol, analysis, final, final['direction'])
-        await send_to_telegram(msg)   # ارسال تلگرام اینجا انجام می‌شود
+        signal_obj = generate_signal(
+            symbol=symbol,
+            direction=final['direction'],
+            prefer_risk=final['risk'],
+            price_30m=last_close,
+            open_15m=data['15m'][-1]['o'],
+            close_15m=data['15m'][-1]['c'],
+            high_15m=data['15m'][-1]['h'],
+            low_15m=data['15m'][-1]['l'],
+            ema21_30m=calculate_ema(closes['30m'], 21)[-1],
+            ema55_30m=calculate_ema(closes['30m'], 55)[-1],
+            ema8_30m=calculate_ema(closes['30m'], 8)[-1],
+            ema21_1h=calculate_ema(closes['1h'], 21)[-1],
+            ema55_1h=calculate_ema(closes['1h'], 55)[-1],
+            ema21_4h=calculate_ema(closes['4h'], 21)[-1],
+            ema55_4h=calculate_ema(closes['4h'], 55)[-1],
+            macd_line_5m=0, hist_5m=0,  # می‌توانی واقعی محاسبه کنی
+            macd_line_15m=0, hist_15m=0,
+            macd_line_30m=0, hist_30m=calculate_macd(closes['30m'])[2][-1],
+            macd_line_1h=0, hist_1h=0,
+            macd_line_4h=0, hist_4h=0,
+            rsi_5m=calculate_rsi(closes['5m'])[-1],
+            rsi_15m=calculate_rsi(closes['15m'])[-1],
+            rsi_30m=calculate_rsi(closes['30m'])[-1],
+            rsi_1h=calculate_rsi(closes['1h'])[-1],
+            rsi_4h=calculate_rsi(closes['4h'])[-1],
+            atr_val_30m=calculate_atr(data['30m'])[-1],
+            curr_vol=data['30m'][-1]['v'],
+            avg_vol_30m=sum([c['v'] for c in data['30m'][-20:]])/20,
+            divergence_detected=False
+        )
+        if signal_obj:
+            msg = compose_signal_source(signal_obj)
+            await send_to_telegram(msg)
     else:
         logger.info("📭 هیچ سیگنال نهایی معتبر یافت نشد")
 
@@ -167,7 +212,6 @@ def decide_signal(results):
     scores.sort(key=lambda x: x[0], reverse=True)
     best_score, best = scores[0]
 
-    # اختلاف کمتر از 1 → بررسی سطح میانی
     if len(scores) > 1 and best_score - scores[1][0] < 1:
         for s, r in scores:
             if 'میانی' in r['risk_name']:
@@ -175,6 +219,7 @@ def decide_signal(results):
         return best
 
     return best
+
 
 # ========== تابع اصلی ==========
 async def main_async():
