@@ -12,7 +12,6 @@ from indicators import (
     calculate_rsi, calculate_ema, calculate_macd, body_strength,
     swing_levels, calculate_atr
 )
-from rules import check_rules_for_level
 from signal_store import append_signal_row, compose_signal_source, tehran_time_str
 
 # ========== تنظیمات لاگ ==========
