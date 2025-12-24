@@ -115,11 +115,10 @@ async def process_symbol(symbol, data, session, index, total):
         dir_text = "صعودی" if direction == 'LONG' else "نزولی"
         logger.info(f"\n➡️ بررسی جهت {dir_text}:")
         for risk in RISK_LEVELS:
-            risk_key = risk["key"]       # LOW / MEDIUM / HIGH
-            risk_name = risk["name"]     # نام فارسی
-            risk_rules = risk["rules"]   # تنظیمات اختصاصی هر سطح
+            risk_key = risk["key"]
+            risk_name = risk["name"]
+            risk_rules = risk["rules"]
 
-            # EMA و RSI خروجی float دارند
             ema21_30m = calculate_ema(closes['30m'], 21)
             ema8_30m = calculate_ema(closes['30m'], 8)
             ema55_30m = calculate_ema(closes['30m'], 55)
@@ -128,7 +127,6 @@ async def process_symbol(symbol, data, session, index, total):
             ema21_4h = calculate_ema(closes['4h'], 21)
             ema55_4h = calculate_ema(closes['4h'], 55)
 
-            # MACD می‌تواند dict یا tuple باشد
             macd_data = calculate_macd(closes['30m'])
             if isinstance(macd_data, tuple) and len(macd_data) == 3:
                 _, _, hist = macd_data
@@ -139,14 +137,13 @@ async def process_symbol(symbol, data, session, index, total):
             else:
                 macd_hist_30m = 0.0
 
-
             rsi_30m = calculate_rsi(closes['30m'])
 
             rule_results, passed_count = evaluate_rules(
                 symbol=symbol,
                 direction=direction,
-                risk=risk_key,        # اینجا کلید رشته‌ای پاس داده می‌شود
-                risk_rules=risk_rules, # ← اصلاح شد
+                risk=risk_key,
+                risk_rules=risk_rules,
                 price_30m=last_close,
                 open_15m=data['15m'][-1]['o'],
                 close_15m=data['15m'][-1]['c'],
@@ -190,7 +187,7 @@ async def process_symbol(symbol, data, session, index, total):
         signal_obj = generate_signal(
             symbol=symbol,
             direction=final['direction'],
-            prefer_risk=final['risk_key'],   # اینجا کلید رشته‌ای پاس داده می‌شود
+            prefer_risk=final['risk_key'],
             price_30m=last_close,
             open_15m=data['15m'][-1]['o'],
             close_15m=data['15m'][-1]['c'],
@@ -219,7 +216,12 @@ async def process_symbol(symbol, data, session, index, total):
             divergence_detected=False
         )
         if signal_obj:
-            msg = compose_signal_source(signal_obj)
+            # ✅ اصلاح فراخوانی compose_signal_source
+            msg = compose_signal_source(
+                check_result=final,
+                analysis_data={"closes": closes, "data": data},
+                direction=final['direction']
+            )
             await send_to_telegram(msg)
     else:
         logger.info("📭 هیچ سیگنال نهایی معتبر یافت نشد")
