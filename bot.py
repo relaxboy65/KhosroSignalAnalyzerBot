@@ -105,6 +105,7 @@ async def send_to_telegram(text):
             logger.error(f"❌ خطا در ارسال به تلگرام: {e}")
             
 # ========== پردازش یک نماد ==========
+# ========== پردازش یک نماد ==========
 async def process_symbol(symbol, data, session, index, total):
     if not data:
         logger.info(f"[{index}/{total}] ❌ داده‌ای برای {symbol} دریافت نشد")
@@ -179,7 +180,7 @@ async def process_symbol(symbol, data, session, index, total):
     final = decide_signal(results)
 
     if not final:
-        logger.info("📭 هیچ سیگنال معتبری یافت نشد")
+        logger.info("📭 هیچ سیگنال نهایی معتبر یافت نشد")
         return
 
     # ساخت سیگنال نهایی
@@ -217,27 +218,26 @@ async def process_symbol(symbol, data, session, index, total):
         analysis_data={"closes": closes, "data": data}
     )
 
-if signal_obj:
-    # پیام تلگرام
-    emoji_dir = "🟢" if final["direction"] == "LONG" else "🔴"
-    emoji_risk = "🐣" if final["risk_key"] == "LOW" else ("🐒" if final["risk_key"] == "MEDIUM" else "🦍")
+    if signal_obj:
+        # پیام تلگرام
+        emoji_dir = "🟢" if final["direction"] == "LONG" else "🔴"
+        emoji_risk = "🐣" if final["risk_key"] == "LOW" else ("🐒" if final["risk_key"] == "MEDIUM" else "🦍")
 
-    msg = (
-        f"{emoji_dir} {emoji_risk} ریسک {final['risk_name']} | "
-        f"{'لانگ' if final['direction']=='LONG' else 'شورت'}\n"
-        f"نماد:\n{symbol}\n"
-        f"قوانین گذرانده: {final['passed_count']}/9\n"
-        f"دلایل: {', '.join(final['reasons'])}\n"
-        f"ورود:\n{signal_obj['price']:.4f}\n"
-        f"استاپ:\n{signal_obj['stop_loss']:.4f}\n"
-        f"تارگت:\n{signal_obj['take_profit']:.4f}\n"
-        f"⏰ {signal_obj['time']}"
-    )
+        msg = (
+            f"{emoji_dir} {emoji_risk} ریسک {final['risk_name']} | "
+            f"{'لانگ' if final['direction']=='LONG' else 'شورت'}\n"
+            f"نماد:\n{symbol}\n"
+            f"قوانین گذرانده: {final['passed_count']}/9\n"
+            f"دلایل: {', '.join(final['reasons'])}\n"
+            f"ورود:\n{signal_obj['price']:.4f}\n"
+            f"استاپ:\n{signal_obj['stop_loss']:.4f}\n"
+            f"تارگت:\n{signal_obj['take_profit']:.4f}\n"
+            f"⏰ {signal_obj['time']}"
+        )
 
-    await send_to_telegram(msg)
-else:
-    logger.info("📭 هیچ سیگنال نهایی معتبر یافت نشد")
-
+        await send_to_telegram(msg)
+    else:
+        logger.info("📭 هیچ سیگنال نهایی معتبر یافت نشد")
 
 
 
