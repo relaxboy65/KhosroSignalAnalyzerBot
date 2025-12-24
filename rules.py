@@ -70,14 +70,16 @@ def rule_rsi(rsi_30m: float, direction: str, risk_rules: dict) -> RuleResult:
     return RuleResult("RSI 30m", ok, f"RSI={rsi_30m:.2f} [حد ≥ {th_count}]")
 
 # 📊 قانون MACD
-def rule_macd(macd_hist_30m: float, direction: str, risk_rules: dict) -> RuleResult:
+def rule_macd(macd_hist_30m, direction: str, risk_rules: dict) -> RuleResult:
     th_count = risk_rules.get("macd_threshold_count", 4)
-    ok = False
-    if direction == "LONG":
-        ok = macd_hist_30m > 0
-    else:
-        ok = macd_hist_30m < 0
+
+    # اگر ورودی لیست بود، آخرین مقدار را بگیر
+    if isinstance(macd_hist_30m, list):
+        macd_hist_30m = macd_hist_30m[-1] if macd_hist_30m else 0.0
+
+    ok = macd_hist_30m > 0 if direction == "LONG" else macd_hist_30m < 0
     return RuleResult("MACD 30m", ok, f"MACD_hist={macd_hist_30m:.4f} [حد ≥ {th_count}]")
+
 
 # 📊 قانون شکست ورود
 def rule_entry_break(price_30m: float, ema21_30m: float, direction: str, risk_rules: dict) -> RuleResult:
