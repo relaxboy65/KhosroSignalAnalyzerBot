@@ -229,16 +229,17 @@ async def process_symbol(symbol, data, session, index, total):
             divergence_detected=False
         )
         if signal_obj:
-        msg = (
-            f"📢 سیگنال جدید {symbol}\n"
-            f"جهت: {final['direction']} | ریسک: {final['risk_name']}\n"
-            f"قیمت ورود: {signal_obj['price']:.4f}\n"
-            f"استاپ: {signal_obj['stop_loss']:.4f}\n"
-            f"تارگت: {signal_obj['take_profit']:.4f}\n"
-            f"زمان: {signal_obj['time']}\n"
-            f"منبع: {signal_obj['signal_source']}\n"
-        )
-    await send_to_telegram(msg)
+            msg = (
+                f"📢 سیگنال جدید {symbol}\n"
+                f"جهت: {final['direction']} | ریسک: {final['risk_name']}\n"
+                f"قیمت ورود: {signal_obj['price']:.4f}\n"
+                f"استاپ: {signal_obj['stop_loss']:.4f}\n"
+                f"تارگت: {signal_obj['take_profit']:.4f}\n"
+                f"زمان: {signal_obj['time']}\n"
+                f"منبع: {signal_obj['signal_source']}\n"
+            )
+            await send_to_telegram(msg)
+
 
     else:
         logger.info("📭 هیچ سیگنال نهایی معتبر یافت نشد")
