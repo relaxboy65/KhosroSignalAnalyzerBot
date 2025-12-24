@@ -1,8 +1,10 @@
 import os
 
+# 🔑 تنظیمات تلگرام
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
+# ⚖️ سطوح ریسک
 RISK_LEVELS = [
     {
         'key': 'LOW',
@@ -48,6 +50,7 @@ RISK_LEVELS = [
     }
 ]
 
+# 📊 لیست نمادها
 SYMBOLS = [
     'XAUT-USDT',
     'BTC-USDT', 'ETH-USDT', 'BNB-USDT', 'SOL-USDT', 'XRP-USDT',
@@ -56,7 +59,7 @@ SYMBOLS = [
     'APT-USDT', 'ARB-USDT', 'OP-USDT', 'SUI-USDT', 'FIL-USDT'
 ]
 
-# پارامترهای مدیریت ریسک دینامیک
+# ⚙️ پارامترهای مدیریت ریسک دینامیک
 RISK_PARAMS = {
     'atr_multiplier': 1.2,   # فاصله استاپ از ورود بر اساس ATR
     'rr_target': 2.0,        # نسبت هدف به ریسک
