@@ -138,6 +138,9 @@ from zoneinfo import ZoneInfo
 from config import RISK_PARAMS
 from signal_store import append_signal_row, tehran_time_str
 
+from config import RISK_PARAMS
+from signal_store import append_signal_row, tehran_time_str, compose_signal_source
+
 def generate_signal(
     symbol: str,
     direction: str,
@@ -156,7 +159,9 @@ def generate_signal(
     atr_val_30m: float,
     curr_vol: float,
     avg_vol_30m: float,
-    divergence_detected: bool
+    divergence_detected: bool,
+    check_result=None,
+    analysis_data=None
 ):
     # 🕒 زمان تهران
     tehran_now = datetime.now(ZoneInfo("Asia/Tehran"))
@@ -177,11 +182,15 @@ def generate_signal(
     if isinstance(hist_30m, list):
         hist_30m = hist_30m[-1] if hist_30m else 0.0
 
-    # 📊 ساخت منبع سیگنال (خلاصه اندیکاتورها)
-    signal_source = (
-        f"EMA21={ema21_30m:.2f}, EMA55={ema55_30m:.2f}, "
-        f"RSI30m={rsi_30m:.2f}, MACD_hist={hist_30m:.4f}"
-    )
+    # 📊 ساخت منبع سیگنال کامل
+    if check_result and analysis_data:
+        signal_source = compose_signal_source(check_result, analysis_data, direction)
+    else:
+        # حالت fallback ساده
+        signal_source = (
+            f"EMA21={ema21_30m:.2f}, EMA55={ema55_30m:.2f}, "
+            f"RSI30m={rsi_30m:.2f}, MACD_hist={hist_30m:.4f}"
+        )
 
     # ذخیره در CSV با همه ستون‌ها
     append_signal_row(
@@ -207,3 +216,4 @@ def generate_signal(
         "time": time_str,
         "signal_source": signal_source
     }
+
