@@ -90,6 +90,7 @@ async def send_to_telegram(text):
                     logger.warning(f"⚠️ خطا در ارسال تلگرام: {resp.status} {txt}")
         except Exception as e:
             logger.error(f"❌ خطا در ارسال به تلگرام: {e}")
+            
 # ========== پردازش یک نماد ==========
 async def process_symbol(symbol, data, session, index, total):
     if not data:
@@ -114,7 +115,19 @@ async def process_symbol(symbol, data, session, index, total):
         dir_text = "صعودی" if direction == 'LONG' else "نزولی"
         logger.info(f"\n➡️ بررسی جهت {dir_text}:")
         for risk in RISK_LEVELS:
-            # فراخوانی evaluate_rules
+            # توجه: calculate_ema خروجی float دارد، پس [-1] حذف شد
+            ema21_30m = calculate_ema(closes['30m'], 21)
+            ema8_30m = calculate_ema(closes['30m'], 8)
+            ema55_30m = calculate_ema(closes['30m'], 55)
+            ema21_1h = calculate_ema(closes['1h'], 21)
+            ema55_1h = calculate_ema(closes['1h'], 55)
+            ema21_4h = calculate_ema(closes['4h'], 21)
+            ema55_4h = calculate_ema(closes['4h'], 55)
+
+            macd_hist_30m = calculate_macd(closes['30m'])[2]  # اگر خروجی float است، بدون [-1]
+
+            rsi_30m = calculate_rsi(closes['30m'])  # اگر خروجی float است، بدون [-1]
+
             rule_results, passed_count = evaluate_rules(
                 symbol=symbol,
                 direction=direction,
@@ -124,15 +137,15 @@ async def process_symbol(symbol, data, session, index, total):
                 close_15m=data['15m'][-1]['c'],
                 high_15m=data['15m'][-1]['h'],
                 low_15m=data['15m'][-1]['l'],
-                ema21_30m=calculate_ema(closes['30m'], 21)[-1],
-                ema8_30m=calculate_ema(closes['30m'], 8)[-1],
-                ema21_1h=calculate_ema(closes['1h'], 21)[-1],
-                ema55_1h=calculate_ema(closes['1h'], 55)[-1],
-                ema21_4h=calculate_ema(closes['4h'], 21)[-1],
-                ema55_4h=calculate_ema(closes['4h'], 55)[-1],
-                macd_hist_30m=calculate_macd(closes['30m'])[2][-1],
-                rsi_30m=calculate_rsi(closes['30m'])[-1],
-                vol_spike_factor=1.0,  # یا محاسبه حجم واقعی
+                ema21_30m=ema21_30m,
+                ema8_30m=ema8_30m,
+                ema21_1h=ema21_1h,
+                ema55_1h=ema55_1h,
+                ema21_4h=ema21_4h,
+                ema55_4h=ema55_4h,
+                macd_hist_30m=macd_hist_30m,
+                rsi_30m=rsi_30m,
+                vol_spike_factor=1.0,
                 divergence_detected=False
             )
 
@@ -142,7 +155,8 @@ async def process_symbol(symbol, data, session, index, total):
                 'passed_rules': [r.name for r in rule_results if r.passed],
                 'reasons': [r.detail for r in rule_results],
                 'risk_name': risk['name'],
-                'risk': risk
+                'risk': risk,
+                'direction': direction
             }
 
             logger.info(f"   سطح {risk['name']} ({direction})")
@@ -153,7 +167,6 @@ async def process_symbol(symbol, data, session, index, total):
             logger.info("-" * 60)
 
             if res['passed']:
-                res['direction'] = direction
                 results.append(res)
 
     final = decide_signal(results)
@@ -168,24 +181,24 @@ async def process_symbol(symbol, data, session, index, total):
             close_15m=data['15m'][-1]['c'],
             high_15m=data['15m'][-1]['h'],
             low_15m=data['15m'][-1]['l'],
-            ema21_30m=calculate_ema(closes['30m'], 21)[-1],
-            ema55_30m=calculate_ema(closes['30m'], 55)[-1],
-            ema8_30m=calculate_ema(closes['30m'], 8)[-1],
-            ema21_1h=calculate_ema(closes['1h'], 21)[-1],
-            ema55_1h=calculate_ema(closes['1h'], 55)[-1],
-            ema21_4h=calculate_ema(closes['4h'], 21)[-1],
-            ema55_4h=calculate_ema(closes['4h'], 55)[-1],
-            macd_line_5m=0, hist_5m=0,  # می‌توانی واقعی محاسبه کنی
+            ema21_30m=ema21_30m,
+            ema55_30m=ema55_30m,
+            ema8_30m=ema8_30m,
+            ema21_1h=ema21_1h,
+            ema55_1h=ema55_1h,
+            ema21_4h=ema21_4h,
+            ema55_4h=ema55_4h,
+            macd_line_5m=0, hist_5m=0,
             macd_line_15m=0, hist_15m=0,
-            macd_line_30m=0, hist_30m=calculate_macd(closes['30m'])[2][-1],
+            macd_line_30m=0, hist_30m=macd_hist_30m,
             macd_line_1h=0, hist_1h=0,
             macd_line_4h=0, hist_4h=0,
-            rsi_5m=calculate_rsi(closes['5m'])[-1],
-            rsi_15m=calculate_rsi(closes['15m'])[-1],
-            rsi_30m=calculate_rsi(closes['30m'])[-1],
-            rsi_1h=calculate_rsi(closes['1h'])[-1],
-            rsi_4h=calculate_rsi(closes['4h'])[-1],
-            atr_val_30m=calculate_atr(data['30m'])[-1],
+            rsi_5m=calculate_rsi(closes['5m']),
+            rsi_15m=calculate_rsi(closes['15m']),
+            rsi_30m=rsi_30m,
+            rsi_1h=calculate_rsi(closes['1h']),
+            rsi_4h=calculate_rsi(closes['4h']),
+            atr_val_30m=calculate_atr(data['30m']),
             curr_vol=data['30m'][-1]['v'],
             avg_vol_30m=sum([c['v'] for c in data['30m'][-20:]])/20,
             divergence_detected=False
