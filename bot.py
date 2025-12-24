@@ -217,6 +217,7 @@ async def process_symbol(symbol, data, session, index, total):
         analysis_data={"closes": closes, "data": data}
     )
 
+if signal_obj:
     # پیام تلگرام
     emoji_dir = "🟢" if final["direction"] == "LONG" else "🔴"
     emoji_risk = "🐣" if final["risk_key"] == "LOW" else ("🐒" if final["risk_key"] == "MEDIUM" else "🦍")
@@ -234,11 +235,9 @@ async def process_symbol(symbol, data, session, index, total):
     )
 
     await send_to_telegram(msg)
+else:
+    logger.info("📭 هیچ سیگنال نهایی معتبر یافت نشد")
 
-
-
-    else:
-        logger.info("📭 هیچ سیگنال نهایی معتبر یافت نشد")
 
 
 
