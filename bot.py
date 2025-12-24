@@ -115,9 +115,9 @@ async def process_symbol(symbol, data, session, index, total):
         dir_text = "صعودی" if direction == 'LONG' else "نزولی"
         logger.info(f"\n➡️ بررسی جهت {dir_text}:")
         for risk in RISK_LEVELS:
-            # استخراج Enum از دیکشنری
-            risk_enum = risk["value"]
-            risk_name = risk["name"]
+            risk_key = risk["key"]       # LOW / MEDIUM / HIGH
+            risk_name = risk["name"]     # نام فارسی
+            risk_rules = risk["rules"]   # تنظیمات اختصاصی هر سطح
 
             # EMA و RSI خروجی float دارند
             ema21_30m = calculate_ema(closes['30m'], 21)
@@ -144,7 +144,8 @@ async def process_symbol(symbol, data, session, index, total):
             rule_results, passed_count = evaluate_rules(
                 symbol=symbol,
                 direction=direction,
-                risk=risk_enum,   # اینجا Enum پاس داده می‌شود
+                risk=risk_key,        # اینجا کلید رشته‌ای پاس داده می‌شود
+                rules=risk_rules,     # قوانین اختصاصی سطح ریسک
                 price_30m=last_close,
                 open_15m=data['15m'][-1]['o'],
                 close_15m=data['15m'][-1]['c'],
@@ -168,7 +169,7 @@ async def process_symbol(symbol, data, session, index, total):
                 'passed_rules': [r.name for r in rule_results if r.passed],
                 'reasons': [r.detail for r in rule_results],
                 'risk_name': risk_name,
-                'risk': risk_enum,
+                'risk_key': risk_key,
                 'direction': direction
             }
 
@@ -188,7 +189,7 @@ async def process_symbol(symbol, data, session, index, total):
         signal_obj = generate_signal(
             symbol=symbol,
             direction=final['direction'],
-            prefer_risk=final['risk'],  # اینجا Enum پاس داده می‌شود
+            prefer_risk=final['risk_key'],   # اینجا کلید رشته‌ای پاس داده می‌شود
             price_30m=last_close,
             open_15m=data['15m'][-1]['o'],
             close_15m=data['15m'][-1]['c'],
