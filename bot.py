@@ -107,26 +107,18 @@ async def send_to_telegram(text):
 # ========== پردازش یک نماد ==========
 async def process_symbol(symbol, data, session, index, total):
     if not data:
-        logger.info(f"\n[{index}/{total}] پردازش نماد {symbol} — ❌ داده دریافت نشد")
+        logger.info(f"[{index}/{total}] ❌ داده‌ای برای {symbol} دریافت نشد")
         return
 
     closes = {tf: [c['c'] for c in data[tf]] for tf in data}
-    last_close = closes['5m'][-1] if '5m' in closes else 0.0
+    last_close = closes['5m'][-1]
 
-    logger.info(f"\n[{index}/{total}] پردازش نماد {symbol}")
+    logger.info(f"\n[{index}/{total}] پردازش {symbol}")
     logger.info("=" * 80)
-    logger.info(f"📊 گزارش اولیه {symbol}")
-    logger.info(f"💰 قیمت فعلی (5m): {last_close:.4f}")
-    logger.info("-" * 60)
-
-    for tf, candles in data.items():
-        last_candle = candles[-1]
-        logger.info(f"⏱ تایم‌فریم {tf}: o={last_candle['o']:.4f}, c={last_candle['c']:.4f}, h={last_candle['h']:.4f}, l={last_candle['l']:.4f}, v={last_candle['v']:.2f}")
 
     results = []
-    for direction in ['LONG', 'SHORT']:
-        dir_text = "صعودی" if direction == 'LONG' else "نزولی"
-        logger.info(f"\n➡️ بررسی جهت {dir_text}:")
+
+    for direction in ["LONG", "SHORT"]:
         for risk in RISK_LEVELS:
             risk_key = risk["key"]
             risk_name = risk["name"]
@@ -141,14 +133,11 @@ async def process_symbol(symbol, data, session, index, total):
             ema55_4h = calculate_ema(closes['4h'], 55)
 
             macd_data = calculate_macd(closes['30m'])
-            if isinstance(macd_data, tuple) and len(macd_data) == 3:
+            if isinstance(macd_data, tuple):
                 _, _, hist = macd_data
-                macd_hist_30m = hist[-1] if isinstance(hist, list) else hist
-            elif isinstance(macd_data, dict):
-                hist = macd_data.get("hist", [])
-                macd_hist_30m = hist[-1] if isinstance(hist, list) and hist else hist
+                macd_hist_30m = hist[-1]
             else:
-                macd_hist_30m = 0.0
+                macd_hist_30m = macd_data.get("hist", [0])[-1]
 
             rsi_30m = calculate_rsi(closes['30m'])
 
@@ -175,76 +164,76 @@ async def process_symbol(symbol, data, session, index, total):
             )
 
             res = {
-                'passed': passed_count >= 5,
-                'passed_count': passed_count,
-                'passed_rules': [r.name for r in rule_results if r.passed],
-                'reasons': [r.detail for r in rule_results],
-                'risk_name': risk_name,
-                'risk_key': risk_key,
-                'direction': direction
+                "passed": passed_count >= 5,
+                "passed_count": passed_count,
+                "passed_rules": [r.name for r in rule_results if r.passed],
+                "reasons": [r.detail for r in rule_results],
+                "risk_name": risk_name,
+                "risk_key": risk_key,
+                "direction": direction
             }
 
-            logger.info(f"   سطح {risk_name} ({direction})")
-            logger.info(f"      ✅ وضعیت: {'پاس شد' if res['passed'] else 'رد شد'}")
-            logger.info(f"      📊 قوانین گذرانده: {res['passed_count']}/9")
-            logger.info(f"      📋 لیست قوانین: {', '.join(res['passed_rules']) if res['passed_rules'] else 'هیچ‌کدام'}")
-            logger.info(f"      📝 دلایل: {', '.join(res['reasons']) if res['reasons'] else '—'}")
-            logger.info("-" * 60)
-
-            if res['passed']:
+            if res["passed"]:
                 results.append(res)
 
     final = decide_signal(results)
-    if final:
-        logger.info(f"✅ تصمیم نهایی: {final['risk_name']} {final['direction']}")
-        signal_obj = generate_signal(
-            symbol=symbol,
-            direction=final['direction'],
-            prefer_risk=final['risk_key'],
-            price_30m=last_close,
-            open_15m=data['15m'][-1]['o'],
-            close_15m=data['15m'][-1]['c'],
-            high_15m=data['15m'][-1]['h'],
-            low_15m=data['15m'][-1]['l'],
-            ema21_30m=ema21_30m,
-            ema55_30m=ema55_30m,
-            ema8_30m=ema8_30m,
-            ema21_1h=ema21_1h,
-            ema55_1h=ema55_1h,
-            ema21_4h=ema21_4h,
-            ema55_4h=ema55_4h,
-            macd_line_5m=0, hist_5m=0,
-            macd_line_15m=0, hist_15m=0,
-            macd_line_30m=0, hist_30m=macd_hist_30m,
-            macd_line_1h=0, hist_1h=0,
-            macd_line_4h=0, hist_4h=0,
-            rsi_5m=calculate_rsi(closes['5m']),
-            rsi_15m=calculate_rsi(closes['15m']),
-            rsi_30m=rsi_30m,
-            rsi_1h=calculate_rsi(closes['1h']),
-            rsi_4h=calculate_rsi(closes['4h']),
-            atr_val_30m=calculate_atr(data['30m']),
-            curr_vol=data['30m'][-1]['v'],
-            avg_vol_30m=sum([c['v'] for c in data['30m'][-20:]])/20,
-            divergence_detected=False
-        )
-        if signal_obj:
-            emoji_dir = "🟢" if final["direction"] == "LONG" else "🔴"
-            emoji_risk = "🐣" if final["risk_key"] == "LOW" else ("🐒" if final["risk_key"] == "MEDIUM" else "🦍")
-        
-            msg = (
-                f"{emoji_dir} {emoji_risk} ریسک {final['risk_name']} | "
-                f"{'لانگ' if final['direction']=='LONG' else 'شورت'}\n"
-                f"نماد:\n{symbol}\n"
-                f"قوانین گذرانده: {final['passed_count']}/9\n"
-                f"دلایل: {', '.join(final['reasons'])}\n"
-                f"ورود:\n{signal_obj['price']:.4f}\n"
-                f"استاپ:\n{signal_obj['stop_loss']:.4f}\n"
-                f"تارگت:\n{signal_obj['take_profit']:.4f}\n"
-                f"⏰ {signal_obj['time']}"
-            )
-        
-            await send_to_telegram(msg)
+
+    if not final:
+        logger.info("📭 هیچ سیگنال معتبری یافت نشد")
+        return
+
+    # ساخت سیگنال نهایی
+    signal_obj = generate_signal(
+        symbol=symbol,
+        direction=final["direction"],
+        prefer_risk=final["risk_key"],
+        price_30m=last_close,
+        open_15m=data['15m'][-1]['o'],
+        close_15m=data['15m'][-1]['c'],
+        high_15m=data['15m'][-1]['h'],
+        low_15m=data['15m'][-1]['l'],
+        ema21_30m=ema21_30m,
+        ema55_30m=ema55_30m,
+        ema8_30m=ema8_30m,
+        ema21_1h=ema21_1h,
+        ema55_1h=ema55_1h,
+        ema21_4h=ema21_4h,
+        ema55_4h=ema55_4h,
+        macd_line_5m=0, hist_5m=0,
+        macd_line_15m=0, hist_15m=0,
+        macd_line_30m=0, hist_30m=macd_hist_30m,
+        macd_line_1h=0, hist_1h=0,
+        macd_line_4h=0, hist_4h=0,
+        rsi_5m=calculate_rsi(closes['5m']),
+        rsi_15m=calculate_rsi(closes['15m']),
+        rsi_30m=rsi_30m,
+        rsi_1h=calculate_rsi(closes['1h']),
+        rsi_4h=calculate_rsi(closes['4h']),
+        atr_val_30m=calculate_atr(data['30m']),
+        curr_vol=data['30m'][-1]['v'],
+        avg_vol_30m=sum(c['v'] for c in data['30m'][-20:]) / 20,
+        divergence_detected=False,
+        check_result=final,
+        analysis_data={"closes": closes, "data": data}
+    )
+
+    # پیام تلگرام
+    emoji_dir = "🟢" if final["direction"] == "LONG" else "🔴"
+    emoji_risk = "🐣" if final["risk_key"] == "LOW" else ("🐒" if final["risk_key"] == "MEDIUM" else "🦍")
+
+    msg = (
+        f"{emoji_dir} {emoji_risk} ریسک {final['risk_name']} | "
+        f"{'لانگ' if final['direction']=='LONG' else 'شورت'}\n"
+        f"نماد:\n{symbol}\n"
+        f"قوانین گذرانده: {final['passed_count']}/9\n"
+        f"دلایل: {', '.join(final['reasons'])}\n"
+        f"ورود:\n{signal_obj['price']:.4f}\n"
+        f"استاپ:\n{signal_obj['stop_loss']:.4f}\n"
+        f"تارگت:\n{signal_obj['take_profit']:.4f}\n"
+        f"⏰ {signal_obj['time']}"
+    )
+
+    await send_to_telegram(msg)
 
 
 
