@@ -115,7 +115,11 @@ async def process_symbol(symbol, data, session, index, total):
         dir_text = "صعودی" if direction == 'LONG' else "نزولی"
         logger.info(f"\n➡️ بررسی جهت {dir_text}:")
         for risk in RISK_LEVELS:
-            # EMA و RSI خروجی float دارند → بدون [-1]
+            # استخراج Enum از دیکشنری
+            risk_enum = risk["value"]
+            risk_name = risk["name"]
+
+            # EMA و RSI خروجی float دارند
             ema21_30m = calculate_ema(closes['30m'], 21)
             ema8_30m = calculate_ema(closes['30m'], 8)
             ema55_30m = calculate_ema(closes['30m'], 55)
@@ -135,13 +139,12 @@ async def process_symbol(symbol, data, session, index, total):
             else:
                 macd_hist_30m = 0.0
 
-            # RSI خروجی float دارد
             rsi_30m = calculate_rsi(closes['30m'])
 
             rule_results, passed_count = evaluate_rules(
                 symbol=symbol,
                 direction=direction,
-                risk=risk,
+                risk=risk_enum,   # اینجا Enum پاس داده می‌شود
                 price_30m=last_close,
                 open_15m=data['15m'][-1]['o'],
                 close_15m=data['15m'][-1]['c'],
@@ -164,12 +167,12 @@ async def process_symbol(symbol, data, session, index, total):
                 'passed_count': passed_count,
                 'passed_rules': [r.name for r in rule_results if r.passed],
                 'reasons': [r.detail for r in rule_results],
-                'risk_name': risk['name'],
-                'risk': risk,
+                'risk_name': risk_name,
+                'risk': risk_enum,
                 'direction': direction
             }
 
-            logger.info(f"   سطح {risk['name']} ({direction})")
+            logger.info(f"   سطح {risk_name} ({direction})")
             logger.info(f"      ✅ وضعیت: {'پاس شد' if res['passed'] else 'رد شد'}")
             logger.info(f"      📊 قوانین گذرانده: {res['passed_count']}/9")
             logger.info(f"      📋 لیست قوانین: {', '.join(res['passed_rules']) if res['passed_rules'] else 'هیچ‌کدام'}")
@@ -185,7 +188,7 @@ async def process_symbol(symbol, data, session, index, total):
         signal_obj = generate_signal(
             symbol=symbol,
             direction=final['direction'],
-            prefer_risk=final['risk'],
+            prefer_risk=final['risk'],  # اینجا Enum پاس داده می‌شود
             price_30m=last_close,
             open_15m=data['15m'][-1]['o'],
             close_15m=data['15m'][-1]['c'],
@@ -218,6 +221,7 @@ async def process_symbol(symbol, data, session, index, total):
             await send_to_telegram(msg)
     else:
         logger.info("📭 هیچ سیگنال نهایی معتبر یافت نشد")
+
 
 
 # ========== انتخاب نهایی سیگنال ==========
