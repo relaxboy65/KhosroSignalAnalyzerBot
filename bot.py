@@ -80,11 +80,24 @@ async def fetch_all_timeframes(session, symbol):
 async def send_to_telegram(text):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"}
+
     async with aiohttp.ClientSession() as temp_session:
         try:
             async with temp_session.post(url, json=payload, timeout=15) as resp:
                 if resp.status == 200:
                     logger.info("✅ پیام به تلگرام ارسال شد")
+                elif resp.status == 429:
+                    data = await resp.json()
+                    retry_after = data.get("parameters", {}).get("retry_after", 5)
+                    logger.warning(f"⚠️ خطا 429: باید {retry_after} ثانیه صبر کنیم")
+                    await asyncio.sleep(retry_after)
+                    # بعد از صبر دوباره تلاش می‌کنیم
+                    async with temp_session.post(url, json=payload, timeout=15) as retry_resp:
+                        if retry_resp.status == 200:
+                            logger.info("✅ پیام پس از انتظار ارسال شد")
+                        else:
+                            txt = await retry_resp.text()
+                            logger.warning(f"⚠️ خطا در ارسال مجدد تلگرام: {retry_resp.status} {txt}")
                 else:
                     txt = await resp.text()
                     logger.warning(f"⚠️ خطا در ارسال تلگرام: {resp.status} {txt}")
@@ -216,13 +229,17 @@ async def process_symbol(symbol, data, session, index, total):
             divergence_detected=False
         )
         if signal_obj:
-            # ✅ اصلاح فراخوانی compose_signal_source
-            msg = compose_signal_source(
-                check_result=final,
-                analysis_data={"closes": closes, "data": data},
-                direction=final['direction']
-            )
-            await send_to_telegram(msg)
+        msg = (
+            f"📢 سیگنال جدید {symbol}\n"
+            f"جهت: {final['direction']} | ریسک: {final['risk_name']}\n"
+            f"قیمت ورود: {signal_obj['price']:.4f}\n"
+            f"استاپ: {signal_obj['stop_loss']:.4f}\n"
+            f"تارگت: {signal_obj['take_profit']:.4f}\n"
+            f"زمان: {signal_obj['time']}\n"
+            f"منبع: {signal_obj['signal_source']}\n"
+        )
+    await send_to_telegram(msg)
+
     else:
         logger.info("📭 هیچ سیگنال نهایی معتبر یافت نشد")
 
