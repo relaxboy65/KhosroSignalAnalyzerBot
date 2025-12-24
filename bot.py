@@ -114,12 +114,28 @@ async def process_symbol(symbol, data, session, index, total):
     closes = {tf: [c['c'] for c in data[tf]] for tf in data}
     last_close = closes['5m'][-1]
 
-    logger.info(f"\n[{index}/{total}] پردازش {symbol}")
+    logger.info(f"\n[{index}/{total}] پردازش نماد {symbol}")
     logger.info("=" * 80)
+
+    # 📊 گزارش اولیه نماد
+    logger.info(f"📊 گزارش اولیه {symbol}")
+    logger.info(f"💰 قیمت فعلی (5m): {last_close:.4f}")
+    logger.info("------------------------------------------------------------")
+    for tf in ["5m", "15m", "30m", "1h", "4h"]:
+        candle = data[tf][-1]
+        logger.info(f"⏱ تایم‌فریم {tf}:")
+        logger.info(f"   قیمت باز: {candle['o']:.4f}")
+        logger.info(f"   قیمت پایانی: {candle['c']:.4f}")
+        logger.info(f"   سقف: {candle['h']:.4f}")
+        logger.info(f"   کف: {candle['l']:.4f}")
+        logger.info(f"   حجم: {candle['v']:.2f}")
+        logger.info("----------------------------------------")
 
     results = []
 
+    # بررسی جهت‌ها
     for direction in ["LONG", "SHORT"]:
+        logger.info(f"\n➡️ بررسی جهت {'صعودی' if direction=='LONG' else 'نزولی'}:")
         for risk in RISK_LEVELS:
             risk_key = risk["key"]
             risk_name = risk["name"]
@@ -164,18 +180,27 @@ async def process_symbol(symbol, data, session, index, total):
                 divergence_detected=False
             )
 
-            res = {
-                "passed": passed_count >= 5,
-                "passed_count": passed_count,
-                "passed_rules": [r.name for r in rule_results if r.passed],
-                "reasons": [r.detail for r in rule_results],
-                "risk_name": risk_name,
-                "risk_key": risk_key,
-                "direction": direction
-            }
+            passed_rules = [r.name for r in rule_results if r.passed]
+            reasons = [r.detail for r in rule_results]
+            status = "قبول شد" if passed_count >= 5 else "رد شد"
 
-            if res["passed"]:
-                results.append(res)
+            logger.info(f"   سطح ریسک {risk_name} ({direction})")
+            logger.info(f"       ✅ وضعیت: {status}")
+            logger.info(f"       📊 قوانین گذرانده: {passed_count}/{len(rule_results)}")
+            logger.info(f"       📋 لیست قوانین: {', '.join(passed_rules) if passed_rules else 'هیچ‌کدام'}")
+            logger.info(f"       📝 دلایل رد/قبول: {', '.join(reasons) if reasons else 'ندارد'}")
+            logger.info("------------------------------------------------------------")
+
+            if passed_count >= 5:
+                results.append({
+                    "passed": True,
+                    "passed_count": passed_count,
+                    "passed_rules": passed_rules,
+                    "reasons": reasons,
+                    "risk_name": risk_name,
+                    "risk_key": risk_key,
+                    "direction": direction
+                })
 
     final = decide_signal(results)
 
@@ -219,7 +244,6 @@ async def process_symbol(symbol, data, session, index, total):
     )
 
     if signal_obj:
-        # پیام تلگرام
         emoji_dir = "🟢" if final["direction"] == "LONG" else "🔴"
         emoji_risk = "🐣" if final["risk_key"] == "LOW" else ("🐒" if final["risk_key"] == "MEDIUM" else "🦍")
 
