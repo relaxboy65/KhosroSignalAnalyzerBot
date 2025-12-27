@@ -1,5 +1,4 @@
 import logging
-from bot import send_to_telegram   # توجه: اگر تابع در bot.py هست، ایمپورت کن
 from dataclasses import dataclass
 from typing import List, Tuple, Optional
 from config import RISK_LEVELS, RISK_PARAMS, RISK_FACTORS, INDICATOR_THRESHOLDS, ADVANCED_RISK_PARAMS
