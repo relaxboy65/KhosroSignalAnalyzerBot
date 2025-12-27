@@ -322,18 +322,34 @@ async def generate_signal(
     )
 
     # ارسال تلگرام با دلایل (فقط وقتی سیگنال معتبر باشد)
-    if status == "SIGNAL":
-        msg = (
-            f"✅ سیگنال {symbol}\n"
-            f"جهت: {direction}\n"
-            f"ریسک: {prefer_risk}\n"
-            f"ورود: {price_30m:.4f}\n"
-            f"استاپ: {stop_loss:.4f}\n"
-            f"تارگت: {take_profit:.4f}\n"
-            f"زمان: {time_str}\n\n"
-            f"📋 قوانین پاس‌شده ({passed_count}/{len(rule_results)}):\n"
-            + ("\n".join(passed_list) if passed_list else "هیچ‌کدام")
-        )
+    # آیکون جهت معامله
+    dir_icon = "🟢" if direction == "LONG" else "🔴"
+    
+    # مدل ریسک مفهومی‌تر
+    risk_icon_map = {
+        "LOW": "🛡️ محافظه‌کار",
+        "MEDIUM": "⚖️ متعادل",
+        "HIGH": "🔥 تهاجمی"
+    }
+    risk_label = risk_icon_map.get(prefer_risk, "⚖️ متعادل")
+    
+    # ساخت پیام تلگرام
+    msg = (
+        f"──────────────\n"
+        f"📊 سیگنال {symbol}\n"
+        f"جهت: {dir_icon} {direction}\n"
+        f"ریسک: {risk_label}\n"
+        f"ورود: {price_30m:.4f}\n"
+        f"استاپ: {stop_loss:.4f}\n"
+        f"تارگت: {take_profit:.4f}\n"
+        f"زمان: {time_str}\n"
+        f"──────────────\n"
+        f"📋 قوانین پاس‌شده ({passed_count}/{len(rule_results)}):\n"
+        + "\n".join([f"✅ {r.name} → {r.detail}" for r in rule_results if r.passed]) + "\n"
+        f"❌ قوانین ردشده:\n"
+        + "\n".join([f"❌ {r.name} → {r.detail}" for r in rule_results if not r.passed])
+    )
+
         await send_to_telegram(msg)
 
     return {
