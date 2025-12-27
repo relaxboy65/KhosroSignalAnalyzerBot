@@ -1,18 +1,15 @@
+import logging
+from bot import send_to_telegram   # توجه: اگر تابع در bot.py هست، ایمپورت کن
 from dataclasses import dataclass
 from typing import List, Tuple, Optional
-
-# ایمپورت تنظیمات و ابزارها
 from config import RISK_LEVELS, RISK_PARAMS, RISK_FACTORS, INDICATOR_THRESHOLDS, ADVANCED_RISK_PARAMS
-from indicators import (
-    calculate_adx, calculate_cci, calculate_sar, calculate_stochastic
-)
-from patterns import (
-    ema_rejection, resistance_test, pullback, double_top_bottom
-)
+from indicators import calculate_adx, calculate_cci, calculate_sar, calculate_stochastic
+from patterns import  ema_rejection, resistance_test, pullback, double_top_bottom
 from signal_store import append_signal_row, tehran_time_str, compose_signal_source
-
 from datetime import datetime
 from zoneinfo import ZoneInfo
+
+logger = logging.getLogger(__name__)
 
 # ✅ ساختار نتیجه هر قانون
 @dataclass
@@ -295,6 +292,15 @@ def generate_signal(
     # شرط صدور سیگنال: حداقل نصف قوانین پاس شوند
     min_pass = max(4, len(rule_results) // 2)
     status = "SIGNAL" if passed_count >= min_pass else "NO_SIGNAL"
+
+        # 📊 لاگ کامل
+    logger.info("="*80)
+    logger.info(f"📊 سیگنال {symbol} | جهت={direction} | ریسک={prefer_risk}")
+    for r in results:
+        logger.info(str(r))
+    logger.info(f"✅ وضعیت نهایی: {status}")
+    logger.info(f"🎯 استاپ: {stop_loss:.4f} | تارگت: {take_profit:.4f}")
+    logger.info("="*80)
 
     # ذخیره در CSV
     append_signal_row(
