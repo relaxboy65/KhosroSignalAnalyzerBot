@@ -317,7 +317,7 @@ def generate_signal(
             + ("\n".join(passed_list) if passed_list else "هیچ‌کدام")
         )
         # اینجا باید await کنیم
-        await send_to_telegram(msg)
+        asyncio.create_task(send_to_telegram(msg))
     
 
     return {
