@@ -41,7 +41,7 @@ def calculate_macd(prices, fast=12, slow=26, signal_period=9):
         return {'macd': None, 'signal': None, 'histogram': None}
     ema_fast = ema_series(prices, fast)
     ema_slow = ema_series(prices, slow)
-    macd_line = [(f - s) if f and s else None for f, s in zip(ema_fast, ema_slow)]
+    macd_line = [(f - s) if f is not None and s is not None else None for f, s in zip(ema_fast, ema_slow)]
     valid_macd = [m for m in macd_line if m is not None]
     if len(valid_macd) < signal_period:
         return {'macd': macd_line[-1], 'signal': None, 'histogram': None}
