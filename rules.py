@@ -35,17 +35,19 @@ async def send_to_telegram(text: str):
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"}
+
+    logger.info("📤 تلاش برای ارسال پیام تلگرام...")
     async with aiohttp.ClientSession() as session:
         try:
-            async with session.post(url, json=payload, timeout=15) as resp:
+            async with session.post(url, json=payload, timeout=20) as resp:
+                body = await resp.text()
                 if resp.status == 200:
                     logger.info("✅ پیام به تلگرام ارسال شد")
                 else:
-                    txt = await resp.text()
-                    logger.warning(f"⚠️ خطا در ارسال تلگرام: {resp.status} {txt}")
+                    logger.warning(f"⚠️ خطا در ارسال تلگرام: {resp.status} | پاسخ: {body}")
         except Exception as e:
             logger.error(f"❌ خطا در ارسال به تلگرام: {e}")
-            
+
 # ===== قوانین پایه =====
 def rule_body_strength(open_15m: float, close_15m: float, high_15m: float, low_15m: float, risk_rules: dict) -> RuleResult:
     bs = abs(close_15m - open_15m) / max(high_15m - low_15m, 1e-6)
@@ -165,13 +167,12 @@ def evaluate_rules(
 
     # ۹ قانون قبلی
     results.append(rule_body_strength(open_15m, close_15m, high_15m, low_15m, risk_rules))
-    results.append(rule_body_strength_5m(open_15m, close_15m, high_15m, low_15m, risk_rules))  # اگر 5m ورودی نداریم، می‌تونی حذفش کنی
+    results.append(rule_body_strength_5m(open_15m, close_15m, high_15m, low_15m, risk_rules))  # اگر 5m واقعی نداری، حذف کن
     results.append(rule_trend_1h(ema21_1h, ema55_1h, direction, risk_rules))
     results.append(rule_trend_4h(ema21_4h, ema55_4h, ema200_4h, direction, risk_rules))
     results.append(rule_rsi(rsi_30m, direction, risk_rules))
     results.append(rule_macd(macd_hist_30m, direction, risk_rules))
     results.append(rule_entry_break(price_30m, ema21_30m, direction, risk_rules))
-    # دو قانون از الگوهای کلاسیک برای تکمیل ۹‌تایی پایه (در نبود داده‌ی کافی، خودکار False می‌شوند)
     if prices_series_30m and len(prices_series_30m) >= 10:
         results.append(rule_ema_rejection(prices_series_30m, ema21_30m))
         results.append(rule_pullback(prices_series_30m, direction))
@@ -179,7 +180,7 @@ def evaluate_rules(
         results.append(RuleResult("EMA Rejection", False, "سری قیمت کافی نیست"))
         results.append(RuleResult("Pullback", False, "سری قیمت کافی نیست"))
 
-    # ۴ قانون جدید (در صورت وجود داده کافی)
+    # ۴ قانون جدید
     if candles and isinstance(candles, list) and len(candles) >= 20:
         results.append(rule_adx(candles, risk_rules, risk))
         results.append(rule_cci(candles, risk_rules, risk))
@@ -195,7 +196,7 @@ def evaluate_rules(
     return results, passed_count
 
 # ===== تولید سیگنال =====
-def generate_signal(
+async def generate_signal(
     symbol: str,
     direction: str,
     prefer_risk: str,
@@ -219,7 +220,7 @@ def generate_signal(
     candles: Optional[List[dict]] = None,
     prices_series_30m: Optional[List[float]] = None
 ):
-        tehran_now = datetime.now(ZoneInfo("Asia/Tehran"))
+    tehran_now = datetime.now(ZoneInfo("Asia/Tehran"))
     time_str = tehran_time_str(tehran_now)
 
     atr_mult = RISK_PARAMS.get("atr_multiplier", 1.2)
@@ -272,7 +273,7 @@ def generate_signal(
     min_pass = max(4, len(rule_results) // 2)
     status = "SIGNAL" if passed_count >= min_pass else "NO_SIGNAL"
 
-    # 📊 لاگ کامل
+    # 📊 لاگ کامل با شمارش و تفکیک
     passed_list = [str(r) for r in rule_results if r.passed]
     failed_list = [str(r) for r in rule_results if not r.passed]
 
@@ -290,7 +291,7 @@ def generate_signal(
     logger.info(f"🎯 استاپ: {stop_loss:.4f} | تارگت: {take_profit:.4f}")
     logger.info("=" * 80)
 
-    # ذخیره در CSV
+    # ذخیره در CSV (همیشه ثبت، مثل قبل)
     append_signal_row(
         symbol=symbol,
         direction=direction,
@@ -303,7 +304,7 @@ def generate_signal(
         position_size_usd=10.0
     )
 
-    # ارسال تلگرام (فقط وقتی سیگنال معتبر باشد)
+    # ارسال تلگرام با دلایل (فقط وقتی سیگنال معتبر باشد)
     if status == "SIGNAL":
         msg = (
             f"✅ سیگنال {symbol}\n"
@@ -316,7 +317,7 @@ def generate_signal(
             f"📋 قوانین پاس‌شده ({passed_count}/{len(rule_results)}):\n"
             + ("\n".join(passed_list) if passed_list else "هیچ‌کدام")
         )
-        asyncio.create_task(send_to_telegram(msg))
+        await send_to_telegram(msg)
 
     return {
         "symbol": symbol,
