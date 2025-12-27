@@ -223,6 +223,7 @@ async def generate_signal(
     tehran_now = datetime.now(ZoneInfo("Asia/Tehran"))
     time_str = tehran_time_str(tehran_now)
 
+    # محاسبه SL/TP اولیه
     atr_mult = RISK_PARAMS.get("atr_multiplier", 1.2)
     rr_target = RISK_PARAMS.get("rr_target", 2.0)
 
@@ -236,8 +237,7 @@ async def generate_signal(
     if isinstance(hist_30m, list):
         hist_30m = hist_30m[-1] if hist_30m else 0.0
 
-    signal_source = compose_signal_source(check_result, analysis_data, direction) if (check_result and analysis_data) else "NA"
-
+    # اجرای قوانین
     risk_rules = next((r["rules"] for r in RISK_LEVELS if r["key"] == prefer_risk), RISK_LEVELS[1]["rules"])
     rule_results, passed_count = evaluate_rules(
         symbol=symbol,
@@ -273,7 +273,7 @@ async def generate_signal(
     min_pass = max(4, len(rule_results) // 2)
     status = "SIGNAL" if passed_count >= min_pass else "NO_SIGNAL"
 
-    # 📊 لاگ کامل با شمارش و تفکیک
+    # 📊 لاگ کامل
     passed_list = [str(r) for r in rule_results if r.passed]
     failed_list = [str(r) for r in rule_results if not r.passed]
 
@@ -290,12 +290,25 @@ async def generate_signal(
     logger.info(f"✅ وضعیت نهایی: {status}")
     logger.info(f"🎯 استاپ: {stop_loss:.4f} | تارگت: {take_profit:.4f}")
     logger.info("=" * 80)
-    
-    # ساخت متن توضیحات برای CSV
-    details_text = "\n".join([str(r) for r in rule_results])
-    passed_text = "\n".join([str(r) for r in rule_results if r.passed])
 
-    # ذخیره در CSV (همیشه ثبت، مثل قبل)
+    # ساخت متن کامل برای ستون signal_source
+    rules_passed = [r.name for r in rule_results if r.passed]
+    passed_str = ";".join(rules_passed) if rules_passed else ""
+    reasons_str = "|".join([r.detail for r in rule_results]) if rule_results else ""
+
+    details_source = (
+        f"Dir={direction}"
+        f" | TF_EMA=30m:EMA21={ema21_30m:.6f},30m:EMA55={ema55_30m:.6f},"
+        f"1h:EMA21={ema21_1h if ema21_1h else 'NA'},1h:EMA55={ema55_1h if ema55_1h else 'NA'},"
+        f"4h:EMA21={ema21_4h if ema21_4h else 'NA'},4h:EMA55={ema55_4h if ema55_4h else 'NA'}"
+        f" | TF_RSI=30m:RSI={rsi_30m:.2f}"
+        f" | TF_MACD=30m:MACD={macd_line_30m if macd_line_30m else 'NA'},30m:HIST={hist_30m if hist_30m else 'NA'}"
+        f" | BS15={abs(close_15m-open_15m)/max(high_15m-low_15m,1e-6):.3f}"
+        f" | RulesPassed={passed_str}"
+        f" | Reasons={reasons_str}"
+    )
+
+    # ذخیره در CSV
     append_signal_row(
         symbol=symbol,
         direction=direction,
@@ -304,12 +317,9 @@ async def generate_signal(
         stop_loss=stop_loss,
         take_profit=take_profit,
         issued_at_tehran=time_str,
-        signal_source=signal_source,
-        position_size_usd=10.0,
-        details=details_text,        # همه قوانین با وضعیت پاس/رد
-        passed_rules=passed_text     # فقط قوانین پاس‌شده
+        signal_source=details_source,
+        position_size_usd=10.0
     )
-
 
     # ارسال تلگرام با دلایل (فقط وقتی سیگنال معتبر باشد)
     if status == "SIGNAL":
