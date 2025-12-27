@@ -28,7 +28,7 @@ class RuleResult:
         status = "✅" if self.passed else "❌"
         return f"{status} {self.name}: {self.detail}"
 
-# ========== ارسال پیام به تلگرام (داخلی، بدون وابستگی به bot.py) ==========
+# ========== ارسال پیام به تلگرام ==========
 async def send_to_telegram(text: str):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         logger.warning("⚠️ تنظیمات تلگرام ناقص است")
@@ -45,7 +45,7 @@ async def send_to_telegram(text: str):
                     logger.warning(f"⚠️ خطا در ارسال تلگرام: {resp.status} {txt}")
         except Exception as e:
             logger.error(f"❌ خطا در ارسال به تلگرام: {e}")
-
+            
 # ===== قوانین پایه =====
 def rule_body_strength(open_15m: float, close_15m: float, high_15m: float, low_15m: float, risk_rules: dict) -> RuleResult:
     bs = abs(close_15m - open_15m) / max(high_15m - low_15m, 1e-6)
@@ -219,7 +219,7 @@ def generate_signal(
     candles: Optional[List[dict]] = None,
     prices_series_30m: Optional[List[float]] = None
 ):
-    tehran_now = datetime.now(ZoneInfo("Asia/Tehran"))
+        tehran_now = datetime.now(ZoneInfo("Asia/Tehran"))
     time_str = tehran_time_str(tehran_now)
 
     atr_mult = RISK_PARAMS.get("atr_multiplier", 1.2)
@@ -272,7 +272,7 @@ def generate_signal(
     min_pass = max(4, len(rule_results) // 2)
     status = "SIGNAL" if passed_count >= min_pass else "NO_SIGNAL"
 
-    # 📊 لاگ کامل با شمارش و تفکیک
+    # 📊 لاگ کامل
     passed_list = [str(r) for r in rule_results if r.passed]
     failed_list = [str(r) for r in rule_results if not r.passed]
 
@@ -290,7 +290,7 @@ def generate_signal(
     logger.info(f"🎯 استاپ: {stop_loss:.4f} | تارگت: {take_profit:.4f}")
     logger.info("=" * 80)
 
-    # ذخیره در CSV (همیشه ثبت، مثل قبل)
+    # ذخیره در CSV
     append_signal_row(
         symbol=symbol,
         direction=direction,
@@ -303,7 +303,7 @@ def generate_signal(
         position_size_usd=10.0
     )
 
-    # ارسال تلگرام با دلایل (فقط وقتی سیگنال معتبر باشد)
+    # ارسال تلگرام (فقط وقتی سیگنال معتبر باشد)
     if status == "SIGNAL":
         msg = (
             f"✅ سیگنال {symbol}\n"
@@ -316,9 +316,7 @@ def generate_signal(
             f"📋 قوانین پاس‌شده ({passed_count}/{len(rule_results)}):\n"
             + ("\n".join(passed_list) if passed_list else "هیچ‌کدام")
         )
-        # اینجا باید await کنیم
         asyncio.create_task(send_to_telegram(msg))
-    
 
     return {
         "symbol": symbol,
