@@ -1,0 +1,363 @@
+symbol,direction,risk_level,entry_price,stop_loss,take_profit,issued_at_tehran,status,hit_time_tehran,hit_price,broker_fee,final_pnl_usd,position_size_usd,return_pct,signal_source,details,passed_rules
+XAUT-USDT,LONG,MEDIUM,4549.59000000,4543.85590920,4566.79227240,2025-12-27 14:40:32,OPEN,,,,,10.00,,NA,"✅ قدرت کندل 15m: BS15=0.951 [حد ≥ 0.48]
+✅ قدرت کندل 5m: BS5=0.951 [حد ≥ 0.48]
+❌ روند EMA 1h: داده EMA 1h موجود نیست
+❌ روند EMA 4h: داده EMA 4h موجود نیست
+✅ RSI 30m: RSI=62.00 [حد ≥ 4]
+✅ MACD 30m: MACD_hist=0.2605 [حد ≥ 4]
+❌ شکست ورود: Price=4549.59, EMA21=4544.93, Th=0.003
+❌ EMA Rejection: EMA=4544.9319, Last=4549.5900
+✅ Pullback: Last=4549.5900, Dir=LONG
+✅ ADX: ADX=43.16 [حد قوی 25]
+✅ CCI: CCI=105.95 [±-100/100] (وزن=3)
+✅ SAR: SAR=4549.5798, Close=4549.59, Dir=LONG
+❌ Stochastic: K=22.35, D=7.45, Dir=LONG [±20/80] (وزن=3)","✅ قدرت کندل 15m: BS15=0.951 [حد ≥ 0.48]
+✅ قدرت کندل 5m: BS5=0.951 [حد ≥ 0.48]
+✅ RSI 30m: RSI=62.00 [حد ≥ 4]
+✅ MACD 30m: MACD_hist=0.2605 [حد ≥ 4]
+✅ Pullback: Last=4549.5900, Dir=LONG
+✅ ADX: ADX=43.16 [حد قوی 25]
+✅ CCI: CCI=105.95 [±-100/100] (وزن=3)
+✅ SAR: SAR=4549.5798, Close=4549.59, Dir=LONG"
+BTC-USDT,SHORT,MEDIUM,87511.60000000,87658.52315800,87070.83052600,2025-12-27 14:40:32,OPEN,,,,,10.00,,NA,"❌ قدرت کندل 15m: BS15=0.064 [حد ≥ 0.48]
+❌ قدرت کندل 5m: BS5=0.064 [حد ≥ 0.48]
+❌ روند EMA 1h: داده EMA 1h موجود نیست
+❌ روند EMA 4h: داده EMA 4h موجود نیست
+✅ RSI 30m: RSI=47.58 [حد ≥ 4]
+❌ MACD 30m: MACD_hist=16.1761 [حد ≥ 4]
+❌ شکست ورود: Price=87511.60, EMA21=87534.29, Th=0.003
+✅ EMA Rejection: EMA=87534.2863, Last=87511.6000
+✅ Pullback: Last=87511.6000, Dir=SHORT
+✅ ADX: ADX=45.87 [حد قوی 25]
+❌ CCI: CCI=-20.57 [±-100/100] (وزن=3)
+❌ SAR: SAR=87372.884, Close=87511.6, Dir=SHORT
+❌ Stochastic: K=43.05, D=14.35, Dir=SHORT [±20/80] (وزن=3)","✅ RSI 30m: RSI=47.58 [حد ≥ 4]
+✅ EMA Rejection: EMA=87534.2863, Last=87511.6000
+✅ Pullback: Last=87511.6000, Dir=SHORT
+✅ ADX: ADX=45.87 [حد قوی 25]"
+ETH-USDT,SHORT,MEDIUM,2925.25000000,2932.86740200,2902.39779400,2025-12-27 14:40:32,OPEN,,,,,10.00,,NA,"❌ قدرت کندل 15m: BS15=0.435 [حد ≥ 0.48]
+❌ قدرت کندل 5m: BS5=0.435 [حد ≥ 0.48]
+❌ روند EMA 1h: داده EMA 1h موجود نیست
+❌ روند EMA 4h: داده EMA 4h موجود نیست
+✅ RSI 30m: RSI=41.84 [حد ≥ 4]
+✅ MACD 30m: MACD_hist=-0.1555 [حد ≥ 4]
+❌ شکست ورود: Price=2925.25, EMA21=2930.95, Th=0.003
+✅ EMA Rejection: EMA=2930.9478, Last=2925.2500
+❌ Pullback: Last=2925.2500, Dir=SHORT
+❌ ADX: ADX=18.55 [حد قوی 25]
+✅ CCI: CCI=-127.96 [±-100/100] (وزن=3)
+❌ SAR: SAR=2918.3106, Close=2925.25, Dir=SHORT
+❌ Stochastic: K=31.53, D=10.51, Dir=SHORT [±20/80] (وزن=3)","✅ RSI 30m: RSI=41.84 [حد ≥ 4]
+✅ MACD 30m: MACD_hist=-0.1555 [حد ≥ 4]
+✅ EMA Rejection: EMA=2930.9478, Last=2925.2500
+✅ CCI: CCI=-127.96 [±-100/100] (وزن=3)"
+BNB-USDT,LONG,MEDIUM,840.27400000,837.54243040,848.46870880,2025-12-27 14:40:32,OPEN,,,,,10.00,,NA,"✅ قدرت کندل 15m: BS15=0.877 [حد ≥ 0.48]
+✅ قدرت کندل 5m: BS5=0.877 [حد ≥ 0.48]
+❌ روند EMA 1h: داده EMA 1h موجود نیست
+❌ روند EMA 4h: داده EMA 4h موجود نیست
+✅ RSI 30m: RSI=55.94 [حد ≥ 4]
+✅ MACD 30m: MACD_hist=0.2675 [حد ≥ 4]
+❌ شکست ورود: Price=840.27, EMA21=838.69, Th=0.003
+❌ EMA Rejection: EMA=838.6898, Last=840.2740
+✅ Pullback: Last=840.2740, Dir=LONG
+❌ ADX: ADX=3.05 [حد قوی 25]
+❌ CCI: CCI=72.43 [±-100/100] (وزن=3)
+❌ SAR: SAR=840.5004, Close=840.274, Dir=LONG
+❌ Stochastic: K=63.41, D=21.14, Dir=LONG [±20/80] (وزن=3)","✅ قدرت کندل 15m: BS15=0.877 [حد ≥ 0.48]
+✅ قدرت کندل 5m: BS5=0.877 [حد ≥ 0.48]
+✅ RSI 30m: RSI=55.94 [حد ≥ 4]
+✅ MACD 30m: MACD_hist=0.2675 [حد ≥ 4]
+✅ Pullback: Last=840.2740, Dir=LONG"
+SOL-USDT,LONG,MEDIUM,122.87000000,122.42918240,124.19245280,2025-12-27 14:40:32,OPEN,,,,,10.00,,NA,"❌ قدرت کندل 15m: BS15=0.143 [حد ≥ 0.48]
+❌ قدرت کندل 5m: BS5=0.143 [حد ≥ 0.48]
+❌ روند EMA 1h: داده EMA 1h موجود نیست
+❌ روند EMA 4h: داده EMA 4h موجود نیست
+✅ RSI 30m: RSI=50.64 [حد ≥ 4]
+❌ MACD 30m: MACD_hist=-0.0319 [حد ≥ 4]
+❌ شکست ورود: Price=122.87, EMA21=122.88, Th=0.003
+✅ EMA Rejection: EMA=122.8805, Last=122.8700
+✅ Pullback: Last=122.8700, Dir=LONG
+❌ ADX: ADX=21.74 [حد قوی 25]
+❌ CCI: CCI=-11.14 [±-100/100] (وزن=3)
+✅ SAR: SAR=122.5394, Close=122.87, Dir=LONG
+❌ Stochastic: K=38.2, D=12.73, Dir=LONG [±20/80] (وزن=3)","✅ RSI 30m: RSI=50.64 [حد ≥ 4]
+✅ EMA Rejection: EMA=122.8805, Last=122.8700
+✅ Pullback: Last=122.8700, Dir=LONG
+✅ SAR: SAR=122.5394, Close=122.87, Dir=LONG"
+XRP-USDT,SHORT,MEDIUM,1.84765000,1.85254840,1.83295480,2025-12-27 14:40:33,OPEN,,,,,10.00,,NA,"✅ قدرت کندل 15m: BS15=0.482 [حد ≥ 0.48]
+✅ قدرت کندل 5m: BS5=0.482 [حد ≥ 0.48]
+❌ روند EMA 1h: داده EMA 1h موجود نیست
+❌ روند EMA 4h: داده EMA 4h موجود نیست
+✅ RSI 30m: RSI=46.13 [حد ≥ 4]
+❌ MACD 30m: MACD_hist=0.0002 [حد ≥ 4]
+❌ شکست ورود: Price=1.85, EMA21=1.85, Th=0.003
+✅ EMA Rejection: EMA=1.8491, Last=1.8477
+❌ Pullback: Last=1.8477, Dir=SHORT
+✅ ADX: ADX=26.72 [حد قوی 25]
+❌ CCI: CCI=-56.63 [±-100/100] (وزن=3)
+❌ SAR: SAR=1.8454, Close=1.84765, Dir=SHORT
+❌ Stochastic: K=21.96, D=7.32, Dir=SHORT [±20/80] (وزن=3)","✅ قدرت کندل 15m: BS15=0.482 [حد ≥ 0.48]
+✅ قدرت کندل 5m: BS5=0.482 [حد ≥ 0.48]
+✅ RSI 30m: RSI=46.13 [حد ≥ 4]
+✅ EMA Rejection: EMA=1.8491, Last=1.8477
+✅ ADX: ADX=26.72 [حد قوی 25]"
+ADA-USDT,LONG,MEDIUM,0.35420000,0.35249240,0.35932280,2025-12-27 14:40:33,OPEN,,,,,10.00,,NA,"❌ قدرت کندل 15m: BS15=0.250 [حد ≥ 0.48]
+❌ قدرت کندل 5m: BS5=0.250 [حد ≥ 0.48]
+❌ روند EMA 1h: داده EMA 1h موجود نیست
+❌ روند EMA 4h: داده EMA 4h موجود نیست
+✅ RSI 30m: RSI=57.10 [حد ≥ 4]
+✅ MACD 30m: MACD_hist=0.0000 [حد ≥ 4]
+✅ شکست ورود: Price=0.35, EMA21=0.35, Th=0.003
+❌ EMA Rejection: EMA=0.3531, Last=0.3542
+✅ Pullback: Last=0.3542, Dir=LONG
+✅ ADX: ADX=36.26 [حد قوی 25]
+✅ CCI: CCI=119.29 [±-100/100] (وزن=3)
+✅ SAR: SAR=0.3524, Close=0.3542, Dir=LONG
+❌ Stochastic: K=70.0, D=23.33, Dir=LONG [±20/80] (وزن=3)","✅ RSI 30m: RSI=57.10 [حد ≥ 4]
+✅ MACD 30m: MACD_hist=0.0000 [حد ≥ 4]
+✅ شکست ورود: Price=0.35, EMA21=0.35, Th=0.003
+✅ Pullback: Last=0.3542, Dir=LONG
+✅ ADX: ADX=36.26 [حد قوی 25]
+✅ CCI: CCI=119.29 [±-100/100] (وزن=3)
+✅ SAR: SAR=0.3524, Close=0.3542, Dir=LONG"
+DOGE-USDT,SHORT,MEDIUM,0.12230000,0.12274280,0.12097160,2025-12-27 14:40:33,OPEN,,,,,10.00,,NA,"✅ قدرت کندل 15m: BS15=1.000 [حد ≥ 0.48]
+✅ قدرت کندل 5m: BS5=1.000 [حد ≥ 0.48]
+❌ روند EMA 1h: داده EMA 1h موجود نیست
+❌ روند EMA 4h: داده EMA 4h موجود نیست
+✅ RSI 30m: RSI=42.43 [حد ≥ 4]
+✅ MACD 30m: MACD_hist=-0.0000 [حد ≥ 4]
+❌ شکست ورود: Price=0.12, EMA21=0.12, Th=0.003
+✅ EMA Rejection: EMA=0.1226, Last=0.1223
+❌ Pullback: Last=0.1223, Dir=SHORT
+✅ ADX: ADX=28.22 [حد قوی 25]
+✅ CCI: CCI=-144.16 [±-100/100] (وزن=3)
+❌ SAR: SAR=0.1221, Close=0.1223, Dir=SHORT
+❌ Stochastic: K=21.19, D=7.06, Dir=SHORT [±20/80] (وزن=3)","✅ قدرت کندل 15m: BS15=1.000 [حد ≥ 0.48]
+✅ قدرت کندل 5m: BS5=1.000 [حد ≥ 0.48]
+✅ RSI 30m: RSI=42.43 [حد ≥ 4]
+✅ MACD 30m: MACD_hist=-0.0000 [حد ≥ 4]
+✅ EMA Rejection: EMA=0.1226, Last=0.1223
+✅ ADX: ADX=28.22 [حد قوی 25]
+✅ CCI: CCI=-144.16 [±-100/100] (وزن=3)"
+DOT-USDT,LONG,MEDIUM,1.75080000,1.74191640,1.77745080,2025-12-27 14:40:33,OPEN,,,,,10.00,,NA,"❌ قدرت کندل 15m: BS15=0.250 [حد ≥ 0.48]
+❌ قدرت کندل 5m: BS5=0.250 [حد ≥ 0.48]
+❌ روند EMA 1h: داده EMA 1h موجود نیست
+❌ روند EMA 4h: داده EMA 4h موجود نیست
+✅ RSI 30m: RSI=57.02 [حد ≥ 4]
+❌ MACD 30m: MACD_hist=-0.0016 [حد ≥ 4]
+✅ شکست ورود: Price=1.75, EMA21=1.75, Th=0.003
+❌ EMA Rejection: EMA=1.7454, Last=1.7508
+❌ Pullback: Last=1.7508, Dir=LONG
+❌ ADX: ADX=7.05 [حد قوی 25]
+❌ CCI: CCI=10.37 [±-100/100] (وزن=3)
+✅ SAR: SAR=1.7359, Close=1.7508, Dir=LONG
+❌ Stochastic: K=64.14, D=21.38, Dir=LONG [±20/80] (وزن=3)","✅ RSI 30m: RSI=57.02 [حد ≥ 4]
+✅ شکست ورود: Price=1.75, EMA21=1.75, Th=0.003
+✅ SAR: SAR=1.7359, Close=1.7508, Dir=LONG"
+POL-USDT,SHORT,MEDIUM,0.10410000,0.10455480,0.10273560,2025-12-27 14:40:33,OPEN,,,,,10.00,,NA,"❌ قدرت کندل 15m: BS15=0.000 [حد ≥ 0.48]
+❌ قدرت کندل 5m: BS5=0.000 [حد ≥ 0.48]
+❌ روند EMA 1h: داده EMA 1h موجود نیست
+❌ روند EMA 4h: داده EMA 4h موجود نیست
+✅ RSI 30m: RSI=45.77 [حد ≥ 4]
+✅ MACD 30m: MACD_hist=-0.0001 [حد ≥ 4]
+❌ شکست ورود: Price=0.10, EMA21=0.10, Th=0.003
+❌ EMA Rejection: EMA=0.1043, Last=0.1041
+✅ Pullback: Last=0.1041, Dir=SHORT
+❌ ADX: ADX=0.0 [حد قوی 25]
+✅ CCI: CCI=-116.05 [±-100/100] (وزن=3)
+❌ SAR: SAR=0.1035, Close=0.1041, Dir=SHORT
+❌ Stochastic: K=40.0, D=13.33, Dir=SHORT [±20/80] (وزن=3)","✅ RSI 30m: RSI=45.77 [حد ≥ 4]
+✅ MACD 30m: MACD_hist=-0.0001 [حد ≥ 4]
+✅ Pullback: Last=0.1041, Dir=SHORT
+✅ CCI: CCI=-116.05 [±-100/100] (وزن=3)"
+LTC-USDT,LONG,MEDIUM,77.45000000,77.15898440,78.32304680,2025-12-27 14:40:33,OPEN,,,,,10.00,,NA,"❌ قدرت کندل 15m: BS15=0.000 [حد ≥ 0.48]
+❌ قدرت کندل 5m: BS5=0.000 [حد ≥ 0.48]
+❌ روند EMA 1h: داده EMA 1h موجود نیست
+❌ روند EMA 4h: داده EMA 4h موجود نیست
+✅ RSI 30m: RSI=57.54 [حد ≥ 4]
+✅ MACD 30m: MACD_hist=0.0081 [حد ≥ 4]
+✅ شکست ورود: Price=77.45, EMA21=77.21, Th=0.003
+❌ EMA Rejection: EMA=77.2136, Last=77.4500
+❌ Pullback: Last=77.4500, Dir=LONG
+❌ ADX: ADX=16.22 [حد قوی 25]
+✅ CCI: CCI=120.67 [±-100/100] (وزن=3)
+✅ SAR: SAR=77.0402, Close=77.45, Dir=LONG
+❌ Stochastic: K=82.35, D=27.45, Dir=LONG [±20/80] (وزن=3)","✅ RSI 30m: RSI=57.54 [حد ≥ 4]
+✅ MACD 30m: MACD_hist=0.0081 [حد ≥ 4]
+✅ شکست ورود: Price=77.45, EMA21=77.21, Th=0.003
+✅ CCI: CCI=120.67 [±-100/100] (وزن=3)
+✅ SAR: SAR=77.0402, Close=77.45, Dir=LONG"
+TRX-USDT,LONG,MEDIUM,0.27920000,0.27871400,0.28065800,2025-12-27 14:40:33,OPEN,,,,,10.00,,NA,"❌ قدرت کندل 15m: BS15=0.333 [حد ≥ 0.48]
+❌ قدرت کندل 5m: BS5=0.333 [حد ≥ 0.48]
+❌ روند EMA 1h: داده EMA 1h موجود نیست
+❌ روند EMA 4h: داده EMA 4h موجود نیست
+❌ RSI 30m: RSI=48.04 [حد ≥ 4]
+❌ MACD 30m: MACD_hist=-0.0001 [حد ≥ 4]
+❌ شکست ورود: Price=0.28, EMA21=0.28, Th=0.003
+✅ EMA Rejection: EMA=0.2793, Last=0.2792
+✅ Pullback: Last=0.2792, Dir=LONG
+✅ ADX: ADX=30.0 [حد قوی 25]
+❌ CCI: CCI=-54.89 [±-100/100] (وزن=3)
+✅ SAR: SAR=0.2789, Close=0.2792, Dir=LONG
+❌ Stochastic: K=37.5, D=12.5, Dir=LONG [±20/80] (وزن=3)","✅ EMA Rejection: EMA=0.2793, Last=0.2792
+✅ Pullback: Last=0.2792, Dir=LONG
+✅ ADX: ADX=30.0 [حد قوی 25]
+✅ SAR: SAR=0.2789, Close=0.2792, Dir=LONG"
+AVAX-USDT,LONG,MEDIUM,12.44700000,12.40452600,12.57442200,2025-12-27 14:40:33,OPEN,,,,,10.00,,NA,"❌ قدرت کندل 15m: BS15=0.176 [حد ≥ 0.48]
+❌ قدرت کندل 5m: BS5=0.176 [حد ≥ 0.48]
+❌ روند EMA 1h: داده EMA 1h موجود نیست
+❌ روند EMA 4h: داده EMA 4h موجود نیست
+✅ RSI 30m: RSI=56.43 [حد ≥ 4]
+✅ MACD 30m: MACD_hist=0.0000 [حد ≥ 4]
+❌ شکست ورود: Price=12.45, EMA21=12.42, Th=0.003
+❌ EMA Rejection: EMA=12.4223, Last=12.4470
+✅ Pullback: Last=12.4470, Dir=LONG
+❌ ADX: ADX=5.62 [حد قوی 25]
+❌ CCI: CCI=72.16 [±-100/100] (وزن=3)
+✅ SAR: SAR=12.3954, Close=12.447, Dir=LONG
+❌ Stochastic: K=55.66, D=18.55, Dir=LONG [±20/80] (وزن=3)","✅ RSI 30m: RSI=56.43 [حد ≥ 4]
+✅ MACD 30m: MACD_hist=0.0000 [حد ≥ 4]
+✅ Pullback: Last=12.4470, Dir=LONG
+✅ SAR: SAR=12.3954, Close=12.447, Dir=LONG"
+ATOM-USDT,LONG,MEDIUM,2.04220000,2.03344480,2.06846560,2025-12-27 14:40:33,OPEN,,,,,10.00,,NA,"✅ قدرت کندل 15m: BS15=0.978 [حد ≥ 0.48]
+✅ قدرت کندل 5m: BS5=0.978 [حد ≥ 0.48]
+❌ روند EMA 1h: داده EMA 1h موجود نیست
+❌ روند EMA 4h: داده EMA 4h موجود نیست
+✅ RSI 30m: RSI=53.60 [حد ≥ 4]
+❌ MACD 30m: MACD_hist=-0.0002 [حد ≥ 4]
+❌ شکست ورود: Price=2.04, EMA21=2.04, Th=0.003
+❌ EMA Rejection: EMA=2.0388, Last=2.0422
+✅ Pullback: Last=2.0422, Dir=LONG
+✅ ADX: ADX=31.05 [حد قوی 25]
+❌ CCI: CCI=63.37 [±-100/100] (وزن=3)
+✅ SAR: SAR=2.0319, Close=2.0422, Dir=LONG
+❌ Stochastic: K=72.89, D=24.3, Dir=LONG [±20/80] (وزن=3)","✅ قدرت کندل 15m: BS15=0.978 [حد ≥ 0.48]
+✅ قدرت کندل 5m: BS5=0.978 [حد ≥ 0.48]
+✅ RSI 30m: RSI=53.60 [حد ≥ 4]
+✅ Pullback: Last=2.0422, Dir=LONG
+✅ ADX: ADX=31.05 [حد قوی 25]
+✅ SAR: SAR=2.0319, Close=2.0422, Dir=LONG"
+XLM-USDT,LONG,MEDIUM,0.21480000,0.21375840,0.21792480,2025-12-27 14:40:34,OPEN,,,,,10.00,,NA,"✅ قدرت کندل 15m: BS15=0.818 [حد ≥ 0.48]
+✅ قدرت کندل 5m: BS5=0.818 [حد ≥ 0.48]
+❌ روند EMA 1h: داده EMA 1h موجود نیست
+❌ روند EMA 4h: داده EMA 4h موجود نیست
+✅ RSI 30m: RSI=57.81 [حد ≥ 4]
+✅ MACD 30m: MACD_hist=0.0002 [حد ≥ 4]
+✅ شکست ورود: Price=0.21, EMA21=0.21, Th=0.003
+❌ EMA Rejection: EMA=0.2138, Last=0.2148
+✅ Pullback: Last=0.2148, Dir=LONG
+❌ ADX: ADX=9.37 [حد قوی 25]
+✅ CCI: CCI=206.9 [±-100/100] (وزن=3)
+✅ SAR: SAR=0.2133, Close=0.2148, Dir=LONG
+❌ Stochastic: K=66.67, D=22.22, Dir=LONG [±20/80] (وزن=3)","✅ قدرت کندل 15m: BS15=0.818 [حد ≥ 0.48]
+✅ قدرت کندل 5m: BS5=0.818 [حد ≥ 0.48]
+✅ RSI 30m: RSI=57.81 [حد ≥ 4]
+✅ MACD 30m: MACD_hist=0.0002 [حد ≥ 4]
+✅ شکست ورود: Price=0.21, EMA21=0.21, Th=0.003
+✅ Pullback: Last=0.2148, Dir=LONG
+✅ CCI: CCI=206.9 [±-100/100] (وزن=3)
+✅ SAR: SAR=0.2133, Close=0.2148, Dir=LONG"
+NEAR-USDT,LONG,MEDIUM,1.51340000,1.50368720,1.54253840,2025-12-27 14:40:34,OPEN,,,,,10.00,,NA,"✅ قدرت کندل 15m: BS15=0.729 [حد ≥ 0.48]
+✅ قدرت کندل 5m: BS5=0.729 [حد ≥ 0.48]
+❌ روند EMA 1h: داده EMA 1h موجود نیست
+❌ روند EMA 4h: داده EMA 4h موجود نیست
+❌ RSI 30m: RSI=43.86 [حد ≥ 4]
+❌ MACD 30m: MACD_hist=-0.0015 [حد ≥ 4]
+❌ شکست ورود: Price=1.51, EMA21=1.52, Th=0.003
+✅ EMA Rejection: EMA=1.5200, Last=1.5134
+✅ Pullback: Last=1.5134, Dir=LONG
+✅ ADX: ADX=30.89 [حد قوی 25]
+❌ CCI: CCI=-90.56 [±-100/100] (وزن=3)
+✅ SAR: SAR=1.5023, Close=1.5134, Dir=LONG
+❌ Stochastic: K=34.95, D=11.65, Dir=LONG [±20/80] (وزن=3)","✅ قدرت کندل 15m: BS15=0.729 [حد ≥ 0.48]
+✅ قدرت کندل 5m: BS5=0.729 [حد ≥ 0.48]
+✅ EMA Rejection: EMA=1.5200, Last=1.5134
+✅ Pullback: Last=1.5134, Dir=LONG
+✅ ADX: ADX=30.89 [حد قوی 25]
+✅ SAR: SAR=1.5023, Close=1.5134, Dir=LONG"
+APT-USDT,LONG,MEDIUM,1.70900000,1.69750160,1.74349520,2025-12-27 14:40:38,OPEN,,,,,10.00,,NA,"❌ قدرت کندل 15m: BS15=0.397 [حد ≥ 0.48]
+❌ قدرت کندل 5m: BS5=0.397 [حد ≥ 0.48]
+❌ روند EMA 1h: داده EMA 1h موجود نیست
+❌ روند EMA 4h: داده EMA 4h موجود نیست
+✅ RSI 30m: RSI=56.49 [حد ≥ 4]
+❌ MACD 30m: MACD_hist=-0.0005 [حد ≥ 4]
+✅ شکست ورود: Price=1.71, EMA21=1.70, Th=0.003
+❌ EMA Rejection: EMA=1.7025, Last=1.7090
+✅ Pullback: Last=1.7090, Dir=LONG
+✅ ADX: ADX=32.51 [حد قوی 25]
+❌ CCI: CCI=60.28 [±-100/100] (وزن=3)
+✅ SAR: SAR=1.6917, Close=1.709, Dir=LONG
+❌ Stochastic: K=60.2, D=20.07, Dir=LONG [±20/80] (وزن=3)","✅ RSI 30m: RSI=56.49 [حد ≥ 4]
+✅ شکست ورود: Price=1.71, EMA21=1.70, Th=0.003
+✅ Pullback: Last=1.7090, Dir=LONG
+✅ ADX: ADX=32.51 [حد قوی 25]
+✅ SAR: SAR=1.6917, Close=1.709, Dir=LONG"
+ARB-USDT,LONG,MEDIUM,0.19180000,0.19080640,0.19478080,2025-12-27 14:40:38,OPEN,,,,,10.00,,NA,"❌ قدرت کندل 15m: BS15=0.000 [حد ≥ 0.48]
+❌ قدرت کندل 5m: BS5=0.000 [حد ≥ 0.48]
+❌ روند EMA 1h: داده EMA 1h موجود نیست
+❌ روند EMA 4h: داده EMA 4h موجود نیست
+❌ RSI 30m: RSI=46.66 [حد ≥ 4]
+❌ MACD 30m: MACD_hist=-0.0002 [حد ≥ 4]
+❌ شکست ورود: Price=0.19, EMA21=0.19, Th=0.003
+❌ EMA Rejection: EMA=0.1922, Last=0.1918
+✅ Pullback: Last=0.1918, Dir=LONG
+✅ ADX: ADX=67.74 [حد قوی 25]
+❌ CCI: CCI=-90.03 [±-100/100] (وزن=3)
+✅ SAR: SAR=0.1905, Close=0.1918, Dir=LONG
+❌ Stochastic: K=35.14, D=11.71, Dir=LONG [±20/80] (وزن=3)","✅ Pullback: Last=0.1918, Dir=LONG
+✅ ADX: ADX=67.74 [حد قوی 25]
+✅ SAR: SAR=0.1905, Close=0.1918, Dir=LONG"
+OP-USDT,LONG,MEDIUM,0.27070000,0.26931520,0.27485440,2025-12-27 14:40:38,OPEN,,,,,10.00,,NA,"✅ قدرت کندل 15m: BS15=0.500 [حد ≥ 0.48]
+✅ قدرت کندل 5m: BS5=0.500 [حد ≥ 0.48]
+❌ روند EMA 1h: داده EMA 1h موجود نیست
+❌ روند EMA 4h: داده EMA 4h موجود نیست
+✅ RSI 30m: RSI=55.34 [حد ≥ 4]
+❌ MACD 30m: MACD_hist=-0.0002 [حد ≥ 4]
+❌ شکست ورود: Price=0.27, EMA21=0.27, Th=0.003
+❌ EMA Rejection: EMA=0.2702, Last=0.2707
+✅ Pullback: Last=0.2707, Dir=LONG
+❌ ADX: ADX=13.67 [حد قوی 25]
+❌ CCI: CCI=0.63 [±-100/100] (وزن=3)
+✅ SAR: SAR=0.2686, Close=0.2707, Dir=LONG
+❌ Stochastic: K=62.86, D=20.95, Dir=LONG [±20/80] (وزن=3)","✅ قدرت کندل 15m: BS15=0.500 [حد ≥ 0.48]
+✅ قدرت کندل 5m: BS5=0.500 [حد ≥ 0.48]
+✅ RSI 30m: RSI=55.34 [حد ≥ 4]
+✅ Pullback: Last=0.2707, Dir=LONG
+✅ SAR: SAR=0.2686, Close=0.2707, Dir=LONG"
+SUI-USDT,LONG,MEDIUM,1.40830000,1.40152000,1.42864000,2025-12-27 14:40:38,OPEN,,,,,10.00,,NA,"❌ قدرت کندل 15m: BS15=0.464 [حد ≥ 0.48]
+❌ قدرت کندل 5m: BS5=0.464 [حد ≥ 0.48]
+❌ روند EMA 1h: داده EMA 1h موجود نیست
+❌ روند EMA 4h: داده EMA 4h موجود نیست
+✅ RSI 30m: RSI=57.72 [حد ≥ 4]
+✅ MACD 30m: MACD_hist=0.0003 [حد ≥ 4]
+✅ شکست ورود: Price=1.41, EMA21=1.40, Th=0.003
+❌ EMA Rejection: EMA=1.4032, Last=1.4083
+✅ Pullback: Last=1.4083, Dir=LONG
+❌ ADX: ADX=0.22 [حد قوی 25]
+✅ CCI: CCI=145.55 [±-100/100] (وزن=3)
+✅ SAR: SAR=1.394, Close=1.4083, Dir=LONG
+❌ Stochastic: K=87.43, D=29.14, Dir=LONG [±20/80] (وزن=3)","✅ RSI 30m: RSI=57.72 [حد ≥ 4]
+✅ MACD 30m: MACD_hist=0.0003 [حد ≥ 4]
+✅ شکست ورود: Price=1.41, EMA21=1.40, Th=0.003
+✅ Pullback: Last=1.4083, Dir=LONG
+✅ CCI: CCI=145.55 [±-100/100] (وزن=3)
+✅ SAR: SAR=1.394, Close=1.4083, Dir=LONG"
+FIL-USDT,SHORT,MEDIUM,1.23020000,1.23967400,1.20177800,2025-12-27 14:40:38,OPEN,,,,,10.00,,NA,"✅ قدرت کندل 15m: BS15=0.667 [حد ≥ 0.48]
+✅ قدرت کندل 5m: BS5=0.667 [حد ≥ 0.48]
+❌ روند EMA 1h: داده EMA 1h موجود نیست
+❌ روند EMA 4h: داده EMA 4h موجود نیست
+✅ RSI 30m: RSI=42.14 [حد ≥ 4]
+✅ MACD 30m: MACD_hist=-0.0017 [حد ≥ 4]
+✅ شکست ورود: Price=1.23, EMA21=1.24, Th=0.003
+❌ EMA Rejection: EMA=1.2388, Last=1.2302
+✅ Pullback: Last=1.2302, Dir=SHORT
+❌ ADX: ADX=16.41 [حد قوی 25]
+✅ CCI: CCI=-131.34 [±-100/100] (وزن=3)
+❌ SAR: SAR=1.2233, Close=1.2302, Dir=SHORT
+❌ Stochastic: K=22.5, D=7.5, Dir=SHORT [±20/80] (وزن=3)","✅ قدرت کندل 15m: BS15=0.667 [حد ≥ 0.48]
+✅ قدرت کندل 5m: BS5=0.667 [حد ≥ 0.48]
+✅ RSI 30m: RSI=42.14 [حد ≥ 4]
+✅ MACD 30m: MACD_hist=-0.0017 [حد ≥ 4]
+✅ شکست ورود: Price=1.23, EMA21=1.24, Th=0.003
+✅ Pullback: Last=1.2302, Dir=SHORT
+✅ CCI: CCI=-131.34 [±-100/100] (وزن=3)"
