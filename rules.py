@@ -290,6 +290,10 @@ async def generate_signal(
     logger.info(f"✅ وضعیت نهایی: {status}")
     logger.info(f"🎯 استاپ: {stop_loss:.4f} | تارگت: {take_profit:.4f}")
     logger.info("=" * 80)
+    
+    # ساخت متن توضیحات برای CSV
+    details_text = "\n".join([str(r) for r in rule_results])
+    passed_text = "\n".join([str(r) for r in rule_results if r.passed])
 
     # ذخیره در CSV (همیشه ثبت، مثل قبل)
     append_signal_row(
@@ -301,8 +305,11 @@ async def generate_signal(
         take_profit=take_profit,
         issued_at_tehran=time_str,
         signal_source=signal_source,
-        position_size_usd=10.0
+        position_size_usd=10.0,
+        details=details_text,        # همه قوانین با وضعیت پاس/رد
+        passed_rules=passed_text     # فقط قوانین پاس‌شده
     )
+
 
     # ارسال تلگرام با دلایل (فقط وقتی سیگنال معتبر باشد)
     if status == "SIGNAL":
