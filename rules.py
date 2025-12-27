@@ -346,8 +346,9 @@ async def generate_signal(
         "stop_loss": stop_loss,
         "take_profit": take_profit,
         "time": time_str,
-        "signal_source": signal_source,
+        "signal_source": details_source,   # 👈 اینجا باید details_source باشد
         "details": [str(r) for r in rule_results],
         "passed_count": passed_count,
         "total_rules": len(rule_results)
     }
+
