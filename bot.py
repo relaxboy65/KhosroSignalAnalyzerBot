@@ -1,6 +1,5 @@
 import aiohttp
 import asyncio
-import time
 import logging
 import sys
 from datetime import datetime
@@ -62,23 +61,6 @@ async def fetch_all_timeframes(session, symbol):
     results = await asyncio.gather(*tasks)
     return {tf: candles for tf, candles in results if candles}
 
-# ========== ارسال پیام به تلگرام ==========
-async def send_to_telegram(text):
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        logger.warning("⚠️ تنظیمات تلگرام ناقص است")
-        return
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"}
-    async with aiohttp.ClientSession() as temp_session:
-        try:
-            async with temp_session.post(url, json=payload, timeout=15) as resp:
-                if resp.status == 200:
-                    logger.info("✅ پیام به تلگرام ارسال شد")
-                else:
-                    logger.warning(f"⚠️ خطا در ارسال تلگرام: {resp.status}")
-        except Exception as e:
-            logger.error(f"❌ خطا در ارسال به تلگرام: {e}")
-
 # ========== پردازش یک نماد ==========
 async def process_symbol(symbol, data, index, total):
     if not data or "30m" not in data:
@@ -93,6 +75,12 @@ async def process_symbol(symbol, data, index, total):
     rsi_30m   = calculate_rsi(closes_30)
     atr_30m   = calculate_atr(data["30m"])
 
+    # اگر داده‌های 1h و 4h داری، می‌تونی این‌ها رو هم محاسبه کنی:
+    ema21_1h = None
+    ema55_1h = None
+    ema21_4h = None
+    ema55_4h = None
+
     direction = "LONG" if ema21_30m and ema55_30m and ema21_30m > ema55_30m else "SHORT"
 
     signal = generate_signal(
@@ -105,8 +93,8 @@ async def process_symbol(symbol, data, index, total):
         high_15m=data.get("15m", [{}])[-1].get("h", closes_30[-1]),
         low_15m=data.get("15m", [{}])[-1].get("l", closes_30[-1]),
         ema21_30m=ema21_30m, ema55_30m=ema55_30m, ema8_30m=ema8_30m,
-        ema21_1h=None, ema55_1h=None,
-        ema21_4h=None, ema55_4h=None,
+        ema21_1h=ema21_1h, ema55_1h=ema55_1h,
+        ema21_4h=ema21_4h, ema55_4h=ema55_4h,
         macd_line_5m=None, hist_5m=None,
         macd_line_15m=None, hist_15m=None,
         macd_line_30m=macd_30m.get("macd"), hist_30m=macd_30m.get("histogram"),
@@ -123,18 +111,8 @@ async def process_symbol(symbol, data, index, total):
         prices_series_30m=closes_30[-120:]
     )
 
-    if signal["status"] == "SIGNAL":
+    if signal and signal.get("status") == "SIGNAL":
         logger.info(f"✅ سیگنال {symbol}: {signal['direction']} | قیمت={signal['price']:.4f}")
-        msg = (
-            f"✅ سیگنال {symbol}\n"
-            f"جهت: {signal['direction']}\n"
-            f"ریسک: {signal['risk']}\n"
-            f"ورود: {signal['price']:.4f}\n"
-            f"استاپ: {signal['stop_loss']:.4f}\n"
-            f"تارگت: {signal['take_profit']:.4f}\n"
-            f"زمان: {signal['time']}"
-        )
-        await send_to_telegram(msg)
     else:
         logger.info(f"📭 بدون سیگنال معتبر برای {symbol}")
 
