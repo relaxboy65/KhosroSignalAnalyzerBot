@@ -5,7 +5,7 @@ import sys
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SYMBOLS
+from config import SYMBOLS
 from indicators import calculate_rsi, calculate_ema, calculate_macd, calculate_atr
 from rules import generate_signal
 
@@ -75,7 +75,6 @@ async def process_symbol(symbol, data, index, total):
     rsi_30m   = calculate_rsi(closes_30)
     atr_30m   = calculate_atr(data["30m"])
 
-    # اگر داده‌های 1h و 4h داری، می‌تونی این‌ها رو هم محاسبه کنی:
     ema21_1h = None
     ema55_1h = None
     ema21_4h = None
@@ -83,7 +82,7 @@ async def process_symbol(symbol, data, index, total):
 
     direction = "LONG" if ema21_30m and ema55_30m and ema21_30m > ema55_30m else "SHORT"
 
-    signal = generate_signal(
+    signal = await generate_signal(
         symbol=symbol,
         direction=direction,
         prefer_risk="MEDIUM",
