@@ -316,7 +316,9 @@ def generate_signal(
             f"📋 قوانین پاس‌شده ({passed_count}/{len(rule_results)}):\n"
             + ("\n".join(passed_list) if passed_list else "هیچ‌کدام")
         )
-        asyncio.create_task(send_to_telegram(msg))
+        # اینجا باید await کنیم
+        await send_to_telegram(msg)
+    
 
     return {
         "symbol": symbol,
