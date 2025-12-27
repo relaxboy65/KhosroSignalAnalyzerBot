@@ -48,23 +48,28 @@ def rule_body_strength_5m(open_5m: float, close_5m: float, high_5m: float, low_5
     ok = bs >= th
     return RuleResult("قدرت کندل 5m", ok, f"BS5={bs:.3f} [حد ≥ {th}]")
 
-# 📊 قانون روند EMA در تایم‌فریم 4h
-def rule_trend_4h(ema21_4h: float, ema55_4h: float, ema200_4h: float, direction: str, risk_rules: dict) -> RuleResult:
-    emas = risk_rules.get("trend_4h_emas", [21, 55])
-    if direction == "LONG":
-        ok = ema21_4h > ema55_4h and (200 not in emas or ema55_4h > ema200_4h)
-    else:
-        ok = ema21_4h < ema55_4h and (200 not in emas or ema55_4h < ema200_4h)
-    return RuleResult("روند EMA 4h", ok, f"EMA21={ema21_4h:.2f}, EMA55={ema55_4h:.2f}, EMA200={ema200_4h:.2f}")
-
 # 📊 قانون روند EMA در تایم‌فریم 1h
 def rule_trend_1h(ema21_1h: float, ema55_1h: float, direction: str, risk_rules: dict) -> RuleResult:
-    emas = risk_rules.get("trend_1h_emas", [21, 55])
+    if ema21_1h is None or ema55_1h is None:
+        return RuleResult("روند EMA 1h", False, "داده EMA 1h موجود نیست")
     if direction == "LONG":
         ok = ema21_1h > ema55_1h
     else:
         ok = ema21_1h < ema55_1h
     return RuleResult("روند EMA 1h", ok, f"EMA21={ema21_1h:.2f}, EMA55={ema55_1h:.2f}")
+
+# 📊 قانون روند EMA در تایم‌فریم 4h
+def rule_trend_4h(ema21_4h: float, ema55_4h: float, ema200_4h: float, direction: str, risk_rules: dict) -> RuleResult:
+    if ema21_4h is None or ema55_4h is None:
+        return RuleResult("روند EMA 4h", False, "داده EMA 4h موجود نیست")
+    if ema200_4h is None:
+        ema200_4h = 0.0  # اگر داده EMA200 نبود، مقدار پیش‌فرض
+
+    if direction == "LONG":
+        ok = ema21_4h > ema55_4h and ema55_4h > ema200_4h
+    else:
+        ok = ema21_4h < ema55_4h and ema55_4h < ema200_4h
+    return RuleResult("روند EMA 4h", ok, f"EMA21={ema21_4h:.2f}, EMA55={ema55_4h:.2f}, EMA200={ema200_4h:.2f}")
 
 # 📊 قانون RSI (30m)
 def rule_rsi(rsi_30m: float, direction: str, risk_rules: dict) -> RuleResult:
