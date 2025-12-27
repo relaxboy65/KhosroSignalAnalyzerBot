@@ -350,7 +350,8 @@ async def generate_signal(
         + "\n".join([f"❌ {r.name} → {r.detail}" for r in rule_results if not r.passed])
     )
 
-        await send_to_telegram(msg)
+    await send_to_telegram(msg)   # 👈 اینجا باید هم‌سطح باشه
+
 
     return {
         "symbol": symbol,
