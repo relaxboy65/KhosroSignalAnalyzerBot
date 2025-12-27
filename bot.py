@@ -1,343 +1,217 @@
-import aiohttp
-import asyncio
+import os
 import time
-import logging
-import sys
+from typing import Dict, List, Tuple, Optional
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from rules import evaluate_rules, generate_signal
 
-from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SYMBOLS, RISK_LEVELS, RISK_PARAMS
+from config import SYMBOLS, RISK_LEVELS
 from indicators import (
-    calculate_rsi, calculate_ema, calculate_macd, body_strength,
-    swing_levels, calculate_atr
+    calculate_ema, calculate_macd, calculate_rsi, calculate_atr
 )
-from signal_store import append_signal_row, compose_signal_source, tehran_time_str
+from rules import generate_signal
 
-# ========== تنظیمات لاگ ==========
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler("bot_log.txt", encoding="utf-8"),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
-logger = logging.getLogger(__name__)
+# اگر کتابخانه صرافی داری، اینجا ایمپورت کن (مثلاً ccxt یا کلاینت خودت)
+# import ccxt
 
-KUCOIN_URL = "https://api.kucoin.com/api/v1/market/candles"
+# -------------------------------
+# ابزار دریافت داده (نمونه ساده/پلیس‌هولدر)
+# -------------------------------
 
-intervals = {
-    "5m": "5min",
-    "15m": "15min",
-    "30m": "30min",
-    "1h": "1hour",
-    "4h": "4hour"
-}
+def fetch_candles(symbol: str, timeframe: str, limit: int = 150) -> List[dict]:
+    """
+    خروجی هر کندل: {'o': open, 'h': high, 'l': low, 'c': close}
+    این تابع را با منبع واقعی‌ات جایگزین کن.
+    """
+    # TODO: جایگزین با API واقعی
+    # raise NotImplementedError("fetch_candles must be implemented with your data source.")
+    return []
 
-# ========== دریافت داده برای یک تایم‌فریم ==========
-async def fetch_timeframe(session, symbol, tf, days):
-    api_tf = intervals[tf]
-    end_time = int(datetime.utcnow().timestamp())
-    start_time = end_time - days * 24 * 3600
-    params = {"symbol": symbol, "type": api_tf, "startAt": start_time, "endAt": end_time}
-    try:
-        async with session.get(KUCOIN_URL, params=params, timeout=20) as resp:
-            if resp.status == 200:
-                data = await resp.json()
-                candles_raw = data.get("data", [])
-                if not candles_raw:
-                    return tf, []
-                parsed = [
-                    {'t': int(c[0]), 'o': float(c[1]), 'c': float(c[2]),
-                     'h': float(c[3]), 'l': float(c[4]), 'v': float(c[5])}
-                    for c in candles_raw
-                ]
-                return tf, list(reversed(parsed))
-            elif resp.status == 429:
-                logger.warning(f"Rate limit برای {symbol} {tf} — ۱۰ ثانیه صبر...")
-                await asyncio.sleep(10)
-                return await fetch_timeframe(session, symbol, tf, days)
-            else:
-                logger.warning(f"خطای HTTP {resp.status} برای {symbol} {tf}")
-                return tf, []
-    except Exception as e:
-        logger.error(f"خطا در دریافت {symbol} {tf}: {e}")
-        return tf, []
+def extract_closes(candles: List[dict]) -> List[float]:
+    return [c['c'] for c in candles] if candles else []
 
-# ========== دریافت همه تایم‌فریم‌ها ==========
-async def fetch_all_timeframes(session, symbol):
-    settings = {"5m": 7, "15m": 7, "30m": 14, "1h": 30, "4h": 60}
-    tasks = [fetch_timeframe(session, symbol, tf, days) for tf, days in settings.items()]
-    results = await asyncio.gather(*tasks)
+def ensure_candles_ok(candles: List[dict], min_len: int = 50) -> bool:
+    return isinstance(candles, list) and len(candles) >= min_len
+
+# -------------------------------
+# دریافت چند تایم‌فریم برای یک نماد
+# -------------------------------
+
+TIMEFRAMES = ["5m", "15m", "30m", "1h", "4h", "1d", "1w"]
+
+def fetch_all_timeframes(symbol: str, limits: Optional[Dict[str, int]] = None) -> Dict[str, List[dict]]:
     data = {}
-    for tf, candles in results:
-        if candles and len(candles) >= 50:
-            data[tf] = candles
-    return symbol, data if data else None
+    for tf in TIMEFRAMES:
+        lim = limits.get(tf, 200) if limits else 200
+        candles = fetch_candles(symbol, tf, lim)
+        data[tf] = candles
+    return data
 
-# ========== ارسال پیام به تلگرام ==========
-async def send_to_telegram(text):
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"}
+def latest_price_from_candles(candles: List[dict]) -> Optional[float]:
+    return candles[-1]['c'] if candles else None
+# -------------------------------
+# محاسبه اندیکاتورهای موردنیاز برای rules.generate_signal
+# -------------------------------
 
-    async with aiohttp.ClientSession() as temp_session:
-        try:
-            async with temp_session.post(url, json=payload, timeout=15) as resp:
-                if resp.status == 200:
-                    logger.info("✅ پیام به تلگرام ارسال شد")
-                elif resp.status == 429:
-                    data = await resp.json()
-                    retry_after = data.get("parameters", {}).get("retry_after", 5)
-                    logger.warning(f"⚠️ خطا 429: باید {retry_after} ثانیه صبر کنیم")
-                    await asyncio.sleep(retry_after)
-                    # بعد از صبر دوباره تلاش می‌کنیم
-                    async with temp_session.post(url, json=payload, timeout=15) as retry_resp:
-                        if retry_resp.status == 200:
-                            logger.info("✅ پیام پس از انتظار ارسال شد")
-                        else:
-                            txt = await retry_resp.text()
-                            logger.warning(f"⚠️ خطا در ارسال مجدد تلگرام: {retry_resp.status} {txt}")
-                else:
-                    txt = await resp.text()
-                    logger.warning(f"⚠️ خطا در ارسال تلگرام: {resp.status} {txt}")
-        except Exception as e:
-            logger.error(f"❌ خطا در ارسال به تلگرام: {e}")
-            
-# ========== پردازش یک نماد ==========
-# ========== پردازش یک نماد ==========
-async def process_symbol(symbol, data, session, index, total):
-    if not data:
-        logger.info(f"[{index}/{total}] ❌ داده‌ای برای {symbol} دریافت نشد")
-        return
+def compute_indicators_for_symbol(tf_data: Dict[str, List[dict]]) -> Dict[str, dict]:
+    ind = {}
 
-    closes = {tf: [c['c'] for c in data[tf]] for tf in data}
-    last_close = closes['5m'][-1]
+    # 30m
+    c30 = tf_data.get("30m", [])
+    closes_30 = extract_closes(c30)
+    ind["30m"] = {
+        "price": latest_price_from_candles(c30),
+        "ema21": calculate_ema(closes_30, 21) if closes_30 else None,
+        "ema55": calculate_ema(closes_30, 55) if closes_30 else None,
+        "ema8":  calculate_ema(closes_30, 8)  if closes_30 else None,
+        "macd": calculate_macd(closes_30),
+        "rsi":  calculate_rsi(closes_30),
+        "atr":  calculate_atr(c30) if c30 else None,
+        "prices_series": closes_30[-120:] if closes_30 else []
+    }
 
-    logger.info(f"\n[{index}/{total}] پردازش نماد {symbol}")
-    logger.info("=" * 80)
+    # 15m
+    c15 = tf_data.get("15m", [])
+    ind["15m"] = {
+        "open": c15[-1]['o'] if c15 else None,
+        "close": c15[-1]['c'] if c15 else None,
+        "high": c15[-1]['h'] if c15 else None,
+        "low":  c15[-1]['l'] if c15 else None,
+    }
 
-    # 📊 گزارش اولیه نماد
-    logger.info(f"📊 گزارش اولیه {symbol}")
-    logger.info(f"💰 قیمت فعلی (5m): {last_close:.4f}")
-    logger.info("------------------------------------------------------------")
-    for tf in ["5m", "15m", "30m", "1h", "4h"]:
-        candle = data[tf][-1]
-        logger.info(f"⏱ تایم‌فریم {tf}:")
-        logger.info(f"   قیمت باز: {candle['o']:.4f}")
-        logger.info(f"   قیمت پایانی: {candle['c']:.4f}")
-        logger.info(f"   سقف: {candle['h']:.4f}")
-        logger.info(f"   کف: {candle['l']:.4f}")
-        logger.info(f"   حجم: {candle['v']:.2f}")
-        logger.info("----------------------------------------")
+    # 5m
+    c5 = tf_data.get("5m", [])
+    ind["5m"] = {
+        "open": c5[-1]['o'] if c5 else None,
+        "close": c5[-1]['c'] if c5 else None,
+        "high": c5[-1]['h'] if c5 else None,
+        "low":  c5[-1]['l'] if c5 else None,
+    }
 
-    results = []
+    # 1h
+    c1h = tf_data.get("1h", [])
+    closes_1h = extract_closes(c1h)
+    ind["1h"] = {
+        "ema21": calculate_ema(closes_1h, 21) if closes_1h else None,
+        "ema55": calculate_ema(closes_1h, 55) if closes_1h else None,
+        "rsi":   calculate_rsi(closes_1h),
+        "macd":  calculate_macd(closes_1h)
+    }
 
-    # بررسی جهت‌ها
-    for direction in ["LONG", "SHORT"]:
-        logger.info(f"\n➡️ بررسی جهت {'صعودی' if direction=='LONG' else 'نزولی'}:")
-        for risk in RISK_LEVELS:
-            risk_key = risk["key"]
-            risk_name = risk["name"]
-            risk_rules = risk["rules"]
+    # 4h
+    c4h = tf_data.get("4h", [])
+    closes_4h = extract_closes(c4h)
+    ind["4h"] = {
+        "ema21": calculate_ema(closes_4h, 21) if closes_4h else None,
+        "ema55": calculate_ema(closes_4h, 55) if closes_4h else None,
+        "ema200": calculate_ema(closes_4h, 200) if closes_4h else None,
+        "rsi":    calculate_rsi(closes_4h),
+        "macd":   calculate_macd(closes_4h)
+    }
 
-            ema21_30m = calculate_ema(closes['30m'], 21)
-            ema8_30m = calculate_ema(closes['30m'], 8)
-            ema55_30m = calculate_ema(closes['30m'], 55)
-            ema21_1h = calculate_ema(closes['1h'], 21)
-            ema55_1h = calculate_ema(closes['1h'], 55)
-            ema21_4h = calculate_ema(closes['4h'], 21)
-            ema55_4h = calculate_ema(closes['4h'], 55)
+    # 1d
+    c1d = tf_data.get("1d", [])
+    ind["1d"] = {
+        "price": latest_price_from_candles(c1d),
+        "rsi": calculate_rsi(extract_closes(c1d)) if c1d else None
+    }
 
-            macd_data = calculate_macd(closes['30m'])
-            if isinstance(macd_data, tuple):
-                _, _, hist = macd_data
-                macd_hist_30m = hist[-1]
-            else:
-                macd_hist_30m = macd_data.get("hist", [0])[-1]
+    # 1w
+    c1w = tf_data.get("1w", [])
+    ind["1w"] = {
+        "price": latest_price_from_candles(c1w),
+        "rsi": calculate_rsi(extract_closes(c1w)) if c1w else None
+    }
 
-            rsi_30m = calculate_rsi(closes['30m'])
+    return ind
 
-            rule_results, passed_count = evaluate_rules(
-                symbol=symbol,
-                direction=direction,
-                risk=risk_key,
-                risk_rules=risk_rules,
-                price_30m=last_close,
-                open_15m=data['15m'][-1]['o'],
-                close_15m=data['15m'][-1]['c'],
-                high_15m=data['15m'][-1]['h'],
-                low_15m=data['15m'][-1]['l'],
-                ema21_30m=ema21_30m,
-                ema8_30m=ema8_30m,
-                ema21_1h=ema21_1h,
-                ema55_1h=ema55_1h,
-                ema21_4h=ema21_4h,
-                ema55_4h=ema55_4h,
-                macd_hist_30m=macd_hist_30m,
-                rsi_30m=rsi_30m,
-                vol_spike_factor=1.0,
-                divergence_detected=False
-            )
+def assemble_rule_inputs(symbol: str, direction: str, prefer_risk: str, tf_data: Dict[str, List[dict]], ind: Dict[str, dict]) -> dict:
+    """
+    آماده‌سازی ورودی‌های تابع generate_signal در rules.py با استفاده از داده‌های تایم‌فریم‌ها.
+    """
+    # استخراج‌های امن
+    safe = lambda d, k, default=None: (d.get(k) if d else default)
 
-            passed_rules = [r.name for r in rule_results if r.passed]
-            reasons = [r.detail for r in rule_results]
-            status = "قبول شد" if passed_count >= 5 else "رد شد"
+    return {
+        "symbol": symbol,
+        "direction": direction,
+        "prefer_risk": prefer_risk,
+        "price_30m": safe(ind["30m"], "price"),
+        "open_15m": safe(ind["15m"], "open"),
+        "close_15m": safe(ind["15m"], "close"),
+        "high_15m": safe(ind["15m"], "high"),
+        "low_15m": safe(ind["15m"], "low"),
+        "ema21_30m": safe(ind["30m"], "ema21"),
+        "ema55_30m": safe(ind["30m"], "ema55"),
+        "ema8_30m":  safe(ind["30m"], "ema8"),
+        "ema21_1h":  safe(ind["1h"], "ema21"),
+        "ema55_1h":  safe(ind["1h"], "ema55"),
+        "ema21_4h":  safe(ind["4h"], "ema21"),
+        "ema55_4h":  safe(ind["4h"], "ema55"),
+        "macd_line_5m": safe(ind["5m"], "macd", {}).get("macd"),
+        "hist_5m":       safe(ind["5m"], "macd", {}).get("histogram"),
+        "macd_line_15m": safe(ind["15m"], "macd", {}).get("macd") if "macd" in ind["15m"] else None,
+        "hist_15m":      safe(ind["15m"], "macd", {}).get("histogram") if "macd" in ind["15m"] else None,
+        "macd_line_30m": safe(ind["30m"], "macd", {}).get("macd"),
+        "hist_30m":      safe(ind["30m"], "macd", {}).get("histogram"),
+        "macd_line_1h":  safe(ind["1h"], "macd", {}).get("macd"),
+        "hist_1h":       safe(ind["1h"], "macd", {}).get("histogram"),
+        "macd_line_4h":  safe(ind["4h"], "macd", {}).get("macd"),
+        "hist_4h":       safe(ind["4h"], "macd", {}).get("histogram"),
+        "rsi_5m": safe(ind["5m"], "rsi"),
+        "rsi_15m": safe(ind["15m"], "rsi"),
+        "rsi_30m": safe(ind["30m"], "rsi"),
+        "rsi_1h": safe(ind["1h"], "rsi"),
+        "rsi_4h": safe(ind["4h"], "rsi"),
+        "atr_val_30m": safe(ind["30m"], "atr"),
+        "curr_vol": None,            # اگر داده حجم داری، مقدار بده
+        "avg_vol_30m": None,         # اگر میانگین حجم داری، مقدار بده
+        "divergence_detected": False,# اگر واگرایی تشخیص می‌دهی، مقدار بده
+        "check_result": None,        # اگر خروجی چک قبلی داری
+        "analysis_data": None,       # اگر تحلیل‌های متنی داری
+        "candles": tf_data.get("30m", []),               # برای قوانین پیشرفته
+        "prices_series_30m": ind["30m"].get("prices_series", [])
+    }
+# -------------------------------
+# انتخاب جهت سیگنال (ساده/پلیس‌هولدر)
+# -------------------------------
+def decide_direction(ind: Dict[str, dict]) -> str:
+    """
+    تصمیم جهت ساده: اگر EMA21_30m بالای EMA55_30m باشد LONG، در غیر اینصورت SHORT.
+    """
+    e21 = ind["30m"].get("ema21")
+    e55 = ind["30m"].get("ema55")
+    if e21 is not None and e55 is not None:
+        return "LONG" if e21 > e55 else "SHORT"
+    return "LONG"
 
-            logger.info(f"   سطح ریسک {risk_name} ({direction})")
-            logger.info(f"       ✅ وضعیت: {status}")
-            logger.info(f"       📊 قوانین گذرانده: {passed_count}/{len(rule_results)}")
-            logger.info(f"       📋 لیست قوانین: {', '.join(passed_rules) if passed_rules else 'هیچ‌کدام'}")
-            logger.info(f"       📝 دلایل رد/قبول: {', '.join(reasons) if reasons else 'ندارد'}")
-            logger.info("------------------------------------------------------------")
-
-            if passed_count >= 5:
-                results.append({
-                    "passed": True,
-                    "passed_count": passed_count,
-                    "passed_rules": passed_rules,
-                    "reasons": reasons,
-                    "risk_name": risk_name,
-                    "risk_key": risk_key,
-                    "direction": direction
-                })
-
-    final = decide_signal(results)
-
-    if not final:
-        logger.info("📭 هیچ سیگنال نهایی معتبر یافت نشد")
-        return
-
-    # ساخت سیگنال نهایی
-    signal_obj = generate_signal(
-        symbol=symbol,
-        direction=final["direction"],
-        prefer_risk=final["risk_key"],
-        price_30m=last_close,
-        open_15m=data['15m'][-1]['o'],
-        close_15m=data['15m'][-1]['c'],
-        high_15m=data['15m'][-1]['h'],
-        low_15m=data['15m'][-1]['l'],
-        ema21_30m=ema21_30m,
-        ema55_30m=ema55_30m,
-        ema8_30m=ema8_30m,
-        ema21_1h=ema21_1h,
-        ema55_1h=ema55_1h,
-        ema21_4h=ema21_4h,
-        ema55_4h=ema55_4h,
-        macd_line_5m=0, hist_5m=0,
-        macd_line_15m=0, hist_15m=0,
-        macd_line_30m=0, hist_30m=macd_hist_30m,
-        macd_line_1h=0, hist_1h=0,
-        macd_line_4h=0, hist_4h=0,
-        rsi_5m=calculate_rsi(closes['5m']),
-        rsi_15m=calculate_rsi(closes['15m']),
-        rsi_30m=rsi_30m,
-        rsi_1h=calculate_rsi(closes['1h']),
-        rsi_4h=calculate_rsi(closes['4h']),
-        atr_val_30m=calculate_atr(data['30m']),
-        curr_vol=data['30m'][-1]['v'],
-        avg_vol_30m=sum(c['v'] for c in data['30m'][-20:]) / 20,
-        divergence_detected=False,
-        check_result=final,
-        analysis_data={"closes": closes, "data": data}
-    )
-
-    if signal_obj:
-        emoji_dir = "🟢" if final["direction"] == "LONG" else "🔴"
-        emoji_risk = "🐣" if final["risk_key"] == "LOW" else ("🐒" if final["risk_key"] == "MEDIUM" else "🦍")
-
-        msg = (
-            f"{emoji_dir} {emoji_risk} ریسک {final['risk_name']} | "
-            f"{'لانگ' if final['direction']=='LONG' else 'شورت'}\n"
-            f"نماد:\n{symbol}\n"
-            f"قوانین گذرانده: {final['passed_count']}/9\n"
-            f"دلایل: {', '.join(final['reasons'])}\n"
-            f"ورود:\n{signal_obj['price']:.4f}\n"
-            f"استاپ:\n{signal_obj['stop_loss']:.4f}\n"
-            f"تارگت:\n{signal_obj['take_profit']:.4f}\n"
-            f"⏰ {signal_obj['time']}"
-        )
-
-        await send_to_telegram(msg)
-    else:
-        logger.info("📭 هیچ سیگنال نهایی معتبر یافت نشد")
-
-
-
-# ========== انتخاب نهایی سیگنال ==========
-def decide_signal(results):
-    if not results:
+# -------------------------------
+# پردازش یک نماد
+# -------------------------------
+def process_symbol(symbol: str, prefer_risk: str = "MEDIUM") -> Optional[dict]:
+    tf_data = fetch_all_timeframes(symbol)
+    if not tf_data.get("30m"):
         return None
 
-    scores = []
-    for r in results:
-        base = r['passed_count']
-        weight = 3 if 'بالا' in r['risk_name'] else (2 if 'میانی' in r['risk_name'] else 1)
-        score = base + weight
-        scores.append((score, r))
+    ind = compute_indicators_for_symbol(tf_data)
+    direction = decide_direction(ind)
 
-    scores.sort(key=lambda x: x[0], reverse=True)
-    best_score, best = scores[0]
+    inputs = assemble_rule_inputs(symbol, direction, prefer_risk, tf_data, ind)
+    signal = generate_signal(**inputs)  # فراخوانی rules.generate_signal
 
-    if len(scores) > 1 and best_score - scores[1][0] < 1:
-        for s, r in scores:
-            if 'میانی' in r['risk_name']:
-                return r
-        return best
+    return signal
 
-    return best
-
-
-# ========== تابع اصلی ==========
-async def main_async():
-    start_time = time.perf_counter()
-    server_start = datetime.now()
-    tehran_start = datetime.now(ZoneInfo("Asia/Tehran"))
-
-    logger.info("=" * 80)
-    logger.info("🚀 شروع تحلیل و سیگنال‌دهی (async)")
-    logger.info(f"⏰ سرور: {server_start.strftime('%Y-%m-%d %H:%M:%S')}")
-    logger.info(f"⏰ تهران: {tehran_start.strftime('%Y-%m-%d %H:%M:%S')}")
-    logger.info("=" * 80)
-
-    async with aiohttp.ClientSession() as session:
-        tasks_fetch = [fetch_all_timeframes(session, sym) for sym in SYMBOLS]
-        results = await asyncio.gather(*tasks_fetch)
-
-        tasks_process = [
-            process_symbol(sym, data, session, idx, len(SYMBOLS))
-            for idx, (sym, data) in enumerate(results, 1)
-        ]
-        await asyncio.gather(*tasks_process)
-
-        for handler in logger.handlers:
-            try:
-                handler.flush()
-            except Exception:
-                pass
-
-        duration = time.perf_counter() - start_time
-        server_end = datetime.now()
-        tehran_end = datetime.now(ZoneInfo("Asia/Tehran"))
-
-        report = (
-            "📊 گزارش اجرای ربات\n\n"
-            f"تعداد ارزهای پردازش‌شده: {len([r for r in results if r[1]])}\n"
-            f"مدت اجرا: {duration:.2f} ثانیه\n"
-            f"پایان (تهران): {tehran_end.strftime('%Y-%m-%d %H:%M:%S')}"
-        )
-        await send_to_telegram(report)
-
-    logger.info("\n✅ پردازش کامل شد")
-    logger.info(f"⏰ سرور: {server_end.strftime('%Y-%m-%d %H:%M:%S')}")
-    logger.info(f"⏰ تهران: {tehran_end.strftime('%Y-%m-%d %H:%M:%S')}")
-    logger.info(f"⏱ مدت اجرا: {duration:.2f} ثانیه")
-    logger.info("=" * 80)
-
-
-if __name__ == "__main__":
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        logger.warning("⚠️ تنظیمات تلگرام را بررسی کنید!")
-    else:
-        asyncio.run(main_async())
+# -------------------------------
+# اجرای برای همه نمادها
+# -------------------------------
+def run_bot(prefer_risk: str = "MEDIUM", sleep_sec: int = 5):
+    print(f"Starting bot at {datetime.now(ZoneInfo('Asia/Tehran'))} | Risk={prefer_risk}")
+    for sym in SYMBOLS:
+        try:
+            sig = process_symbol(sym, prefer_risk=prefer_risk)
+            if sig and sig.get("status") == "SIGNAL":
+                print(f"[SIGNAL] {sym} | {sig['direction']} | Price={sig['price']} | SL={sig['stop_loss']} | TP={sig['take_profit']}")
+            else:
+                print(f"[NO] {sym}")
+        except Exception as e:
+            print(f"[ERR] {sym}: {e}")
+        time.sleep(sleep_sec)
