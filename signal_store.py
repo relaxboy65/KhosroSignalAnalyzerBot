@@ -1,4 +1,3 @@
-# signal_store.py
 import os
 import csv
 from datetime import datetime
@@ -7,14 +6,13 @@ from zoneinfo import ZoneInfo
 # پوشه ذخیره‌سازی
 SIGNALS_DIR = "signals"
 
-# ستون‌های CSV روزانه
+# ستون‌های CSV روزانه (فقط همون‌هایی که نیاز داری)
 CSV_HEADERS = [
     "symbol", "direction", "risk_level", "entry_price", "stop_loss", "take_profit",
     "issued_at_tehran", "status", "hit_time_tehran", "hit_price",
     "broker_fee", "final_pnl_usd", "position_size_usd", "return_pct",
-    "signal_source", "details", "passed_rules"   # 👈 ستون‌های جدید
+    "signal_source"
 ]
-
 
 def ensure_dir():
     if not os.path.isdir(SIGNALS_DIR):
@@ -37,21 +35,15 @@ def daily_csv_path(date_str=None):
 
 def compose_signal_source(check_result, analysis_data, direction):
     # ساخت منبع سیگنال کامل برای تحلیل‌های بعدی
-    # Indicators: EMA21/EMA55/MACD/RSI + مقادیر اخیر در تایم‌فریم‌های کلیدی
     closes = analysis_data.get("closes", {})
-    tf_indicators = []
 
-    def latest_val(series):
-        return round(series[-1], 6) if series and series[-1] is not None else None
-
-    # برای سادگی، فقط آخرین EMA21/EMA55 از 30m و 1h را اضافه می‌کنیم اگر موجود باشند
     from indicators import calculate_ema, calculate_rsi, calculate_macd, body_strength
 
     ema_parts = []
     for tf in ["30m", "1h", "4h"]:
         if tf in closes and len(closes[tf]) >= 55:
             ema21 = calculate_ema(closes[tf], 21)
-            ema55 = calculate_ema(closes[tf], 55) if len(closes[tf]) >= 55 else None
+            ema55 = calculate_ema(closes[tf], 55)
             ema_parts.append(f"{tf}:EMA21={round(ema21,6) if ema21 is not None else 'NA'}")
             ema_parts.append(f"{tf}:EMA55={round(ema55,6) if ema55 is not None else 'NA'}")
 
@@ -79,7 +71,7 @@ def compose_signal_source(check_result, analysis_data, direction):
     rules_passed = check_result.get("passed_rules", [])
     passed_str = ";".join(rules_passed) if rules_passed else ""
 
-    # شمارش‌های RSI/MACD از متن reasons (به‌صورت آزاد)
+    # دلایل از check_result
     reasons = check_result.get("reasons", [])
     reasons_str = "|".join(reasons) if reasons else ""
 
@@ -96,8 +88,7 @@ def compose_signal_source(check_result, analysis_data, direction):
 
 def append_signal_row(
     symbol, direction, risk_level_name, entry_price, stop_loss, take_profit,
-    issued_at_tehran, signal_source, position_size_usd=10.0,
-    details="", passed_rules=""
+    issued_at_tehran, signal_source, position_size_usd=10.0
 ):
     path = daily_csv_path()
     file_exists = os.path.isfile(path)
@@ -117,21 +108,9 @@ def append_signal_row(
         "final_pnl_usd": "",
         "position_size_usd": f"{position_size_usd:.2f}",
         "return_pct": "",
-        "signal_source": signal_source,
-        "details": details,           # 👈 اضافه شد
-        "passed_rules": passed_rules  # 👈 اضافه شد
+        "signal_source": signal_source
     }
 
-    with open(path, mode="a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_HEADERS)
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow(row)
-
-    return path
-
-
-    # نوشتن CSV
     with open(path, mode="a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=CSV_HEADERS)
         if not file_exists:
