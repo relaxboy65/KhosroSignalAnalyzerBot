@@ -289,20 +289,20 @@ def generate_signal(
         stop_loss = price_30m + atr_val_30m * atr_mult * stop_factor
         take_profit = price_30m - (stop_loss - price_30m) * rr_target * tp_factor
 
-    # شرط صدور سیگنال: حداقل نصف قوانین پاس شوند
+        # شرط صدور سیگنال: حداقل نصف قوانین پاس شوند
     min_pass = max(4, len(rule_results) // 2)
     status = "SIGNAL" if passed_count >= min_pass else "NO_SIGNAL"
 
-        # 📊 لاگ کامل
+    # 📊 لاگ کامل
     logger.info("="*80)
     logger.info(f"📊 سیگنال {symbol} | جهت={direction} | ریسک={prefer_risk}")
-    for r in results:
+    for r in rule_results:
         logger.info(str(r))
     logger.info(f"✅ وضعیت نهایی: {status}")
     logger.info(f"🎯 استاپ: {stop_loss:.4f} | تارگت: {take_profit:.4f}")
     logger.info("="*80)
 
-    # ذخیره در CSV
+    # ذخیره در CSV با مشخصات کامل
     append_signal_row(
         symbol=symbol,
         direction=direction,
@@ -315,19 +315,19 @@ def generate_signal(
         position_size_usd=10.0
     )
 
-    # خروجی برای تلگرام/نمایش
-    return {
-        "symbol": symbol,
-        "direction": direction,
-        "risk": prefer_risk,
-        "status": status,
-        "strength": signal_strength if status == "SIGNAL" else None,
-        "price": price_30m,
-        "stop_loss": stop_loss,
-        "take_profit": take_profit,
-        "time": time_str,
-        "signal_source": signal_source,
-        "details": [str(r) for r in rule_results],
-        "passed_count": passed_count,
-        "total_rules": len(rule_results)
-    }
+    # ارسال تلگرام با دلایل سیگنال
+    if status == "SIGNAL":
+        passed_rules = [r.name for r in rule_results if r.passed]
+        reasons = "\n".join([str(r) for r in rule_results if r.passed])
+        msg = (
+            f"✅ سیگنال {symbol}\n"
+            f"جهت: {direction}\n"
+            f"ریسک: {prefer_risk}\n"
+            f"ورود: {price_30m:.4f}\n"
+            f"استاپ: {stop_loss:.4f}\n"
+            f"تارگت: {take_profit:.4f}\n"
+            f"زمان: {time_str}\n\n"
+            f"📋 قوانین پاس‌شده ({passed_count}/{len(rule_results)}):\n"
+            f"{reasons if reasons else 'هیچ‌کدام'}"
+        )
+        asyncio.create_task(send_to_telegram(msg))
