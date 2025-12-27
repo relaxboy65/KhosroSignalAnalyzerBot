@@ -66,3 +66,27 @@ RISK_PARAMS = {
     'swing_lookback': 10,    # نگاه به 10 کندل اخیر برای Swing
     'rr_fallback': 2.0       # اگر ATR نباشد، RR بر اساس Swing
 }
+
+# 📊 وزن‌دهی فاکتورها برای هر سطح ریسک
+RISK_FACTORS = {
+    "LOW": {"ADX": 3, "CCI": 2, "SAR": 3, "Stoch": 2, "TF_Big": 4, "Patterns": 2, "RiskMgmt": 4},
+    "MEDIUM": {"ADX": 2, "CCI": 3, "SAR": 2, "Stoch": 3, "TF_Big": 3, "Patterns": 3, "RiskMgmt": 3},
+    "HIGH": {"ADX": 1, "CCI": 4, "SAR": 1, "Stoch": 4, "TF_Big": 1, "Patterns": 4, "RiskMgmt": 4}
+}
+
+# 📈 آستانه‌های اندیکاتورهای پیشرفته
+INDICATOR_THRESHOLDS = {
+    "ADX_STRONG": 25,   # روند قوی
+    "ADX_WEAK": 20,     # روند ضعیف
+    "CCI_OVERBOUGHT": 100,
+    "CCI_OVERSOLD": -100,
+    "STOCH_OVERBOUGHT": 80,
+    "STOCH_OVERSOLD": 20
+}
+
+# 🛡 مدیریت ریسک پیشرفته
+ADVANCED_RISK_PARAMS = {
+    "LOW": {"stop_loss_factor": 0.5, "take_profit_factor": 1.0, "signal_strength": "Strong"},
+    "MEDIUM": {"stop_loss_factor": 1.0, "take_profit_factor": 1.5, "signal_strength": "Normal"},
+    "HIGH": {"stop_loss_factor": 1.5, "take_profit_factor": 2.0, "signal_strength": "Aggressive"}
+}
