@@ -12,8 +12,9 @@ CSV_HEADERS = [
     "symbol", "direction", "risk_level", "entry_price", "stop_loss", "take_profit",
     "issued_at_tehran", "status", "hit_time_tehran", "hit_price",
     "broker_fee", "final_pnl_usd", "position_size_usd", "return_pct",
-    "signal_source"
+    "signal_source", "details", "passed_rules"   # 👈 ستون‌های جدید
 ]
+
 
 def ensure_dir():
     if not os.path.isdir(SIGNALS_DIR):
@@ -95,12 +96,12 @@ def compose_signal_source(check_result, analysis_data, direction):
 
 def append_signal_row(
     symbol, direction, risk_level_name, entry_price, stop_loss, take_profit,
-    issued_at_tehran, signal_source, position_size_usd=10.0
+    issued_at_tehran, signal_source, position_size_usd=10.0,
+    details="", passed_rules=""
 ):
     path = daily_csv_path()
     file_exists = os.path.isfile(path)
 
-    # آماده‌سازی ردیف اولیه
     row = {
         "symbol": symbol,
         "direction": direction,
@@ -116,8 +117,19 @@ def append_signal_row(
         "final_pnl_usd": "",
         "position_size_usd": f"{position_size_usd:.2f}",
         "return_pct": "",
-        "signal_source": signal_source
+        "signal_source": signal_source,
+        "details": details,           # 👈 اضافه شد
+        "passed_rules": passed_rules  # 👈 اضافه شد
     }
+
+    with open(path, mode="a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=CSV_HEADERS)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(row)
+
+    return path
+
 
     # نوشتن CSV
     with open(path, mode="a", newline="", encoding="utf-8") as f:
