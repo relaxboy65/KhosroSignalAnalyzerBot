@@ -262,7 +262,43 @@ def evaluate_rules(
         results.append(RuleResult("Divergence", True, "واگرایی شناسایی شد"))
     else:
         results.append(RuleResult("Divergence", False, "واگرایی وجود ندارد"))
+    # قوانین تایم‌فریم کوتاه‌تر (1m)
+    if closes_by_tf and "1m" in closes_by_tf and len(closes_by_tf["1m"]) >= 20:
+        data_1m = closes_by_tf["1m"]
+        avg_vol = sum(c['v'] for c in data_1m[-20:]) / 20
+        if data_1m[-1]['v'] > 1.5 * avg_vol:
+            results.append(RuleResult("حجم لحظه‌ای 1m", True, "اسپایک حجم"))
+        else:
+            results.append(RuleResult("حجم لحظه‌ای 1m", False, "اسپایک حجم وجود ندارد"))
 
+        if all(data_1m[-i]['c'] > data_1m[-i]['o'] for i in range(1,4)):
+            results.append(RuleResult("کندل‌های متوالی 1m", True, "3 کندل صعودی"))
+        else:
+            results.append(RuleResult("کندل‌های متوالی 1m", False, "شرط برقرار نیست"))
+
+        ema8_1m = calculate_ema([c['c'] for c in data_1m], 8)
+        ema21_1m = calculate_ema([c['c'] for c in data_1m], 21)
+        if ema8_1m > ema21_1m:
+            results.append(RuleResult("EMA کراس سریع", True, "EMA8 بالای EMA21"))
+        else:
+            results.append(RuleResult("EMA کراس سریع", False, "EMA8 زیر EMA21"))
+
+    # قوانین ترکیبی
+    if rsi_30m > 50 and macd_hist_30m > 0 and any(r.name.startswith("ADX") and r.passed for r in results):
+        results.append(RuleResult("تأیید روند صعودی", True, "RSI>50, MACD+, ADX>20"))
+    else:
+        results.append(RuleResult("تأیید روند صعودی", False, "شرایط کامل برقرار نیست"))
+
+    if rsi_30m < 40 and macd_hist_30m < 0 and any(r.name.startswith("EMA Rejection") and r.passed for r in results):
+        results.append(RuleResult("فشار فروش", True, "RSI<40, MACD-, EMA Reject"))
+    else:
+        results.append(RuleResult("فشار فروش", False, "شرایط کامل برقرار نیست"))
+
+    passed_weight = sum(RISK_FACTORS[risk].get(r.name.split()[0], 1) for r in results if r.passed)
+    total_weight = sum(RISK_FACTORS[risk].get(r.name.split()[0], 1) for r in results)
+    return results, passed_weight, total_weight
+
+    
     # محاسبه وزن‌ها
     passed_weight = sum(RISK_FACTORS[risk].get(r.name.split()[0], 1) for r in results if r.passed)
     total_weight = sum(RISK_FACTORS[risk].get(r.name.split()[0], 1) for r in results)
@@ -280,9 +316,11 @@ async def generate_signal(
     open_15m: float, close_15m: float, high_15m: float, low_15m: float,
     # 5m
     open_5m: float, close_5m: float, high_5m: float, low_5m: float,
-    ema21_30m: float, ema55_30m: float, ema8_30m: float,
-    ema21_1h: float, ema55_1h: float,
-    ema21_4h: float, ema55_4h: float, ema200_4h: float = 0.0,
+    # 1m
+    open_1m: float = None, close_1m: float = None, high_1m: float = None, low_1m: float = None,
+    ema21_30m: float = None, ema55_30m: float = None, ema8_30m: float = None,
+    ema21_1h: float = None, ema55_1h: float = None,
+    ema21_4h: float = None, ema55_4h: float = None, ema200_4h: float = None,
     macd_line_30m: float = None, hist_30m: float = None,
     rsi_30m: float = None,
     atr_val_30m: float = 0.0,
@@ -290,24 +328,11 @@ async def generate_signal(
     avg_vol_30m: float = 0.0,
     divergence_detected: bool = False,
     candles: Optional[List[dict]] = None,
-    prices_series_30m: Optional[List[float]] = None
+    prices_series_30m: Optional[List[float]] = None,
+    closes_by_tf: Optional[dict] = None
 ):
     tehran_now = datetime.now(ZoneInfo("Asia/Tehran"))
     time_str = tehran_time_str(tehran_now)
-
-    # محاسبه SL/TP
-    atr_mult = RISK_PARAMS.get("atr_multiplier", 1.2)
-    rr_target = RISK_PARAMS.get("rr_target", 2.0)
-
-    if direction == "LONG":
-        stop_loss = price_30m - atr_val_30m * atr_mult
-        take_profit = price_30m + (price_30m - stop_loss) * rr_target
-    else:
-        stop_loss = price_30m + atr_val_30m * atr_mult
-        take_profit = price_30m - (stop_loss - price_30m) * rr_target
-
-    if isinstance(hist_30m, list):
-        hist_30m = hist_30m[-1] if hist_30m else 0.0
 
     # اجرای قوانین
     risk_rules = next((r["rules"] for r in RISK_LEVELS if r["key"] == prefer_risk), RISK_LEVELS[1]["rules"])
@@ -318,7 +343,8 @@ async def generate_signal(
         risk_rules=risk_rules,
         price_30m=price_30m,
         open_15m=open_15m, close_15m=close_15m, high_15m=high_15m, low_15m=low_15m,
-        open_5m=open_5m, close_5m=close_5m, high_5m=high_5m, low_5m=low_5m,  # ✅ اضافه شد
+        open_5m=open_5m, close_5m=close_5m, high_5m=high_5m, low_5m=low_5m,
+        open_1m=open_1m, close_1m=close_1m, high_1m=high_1m, low_1m=low_1m,
         ema21_30m=ema21_30m, ema8_30m=ema8_30m,
         ema21_1h=ema21_1h, ema55_1h=ema55_1h,
         ema21_4h=ema21_4h, ema55_4h=ema55_4h, ema200_4h=ema200_4h,
@@ -327,13 +353,30 @@ async def generate_signal(
         vol_spike_factor=1.0,
         divergence_detected=divergence_detected,
         candles=candles,
-        prices_series_30m=prices_series_30m
+        prices_series_30m=prices_series_30m,
+        closes_by_tf=closes_by_tf
     )
 
-    # دسته‌بندی ریسک پویا
+    # مدیریت ریسک پویا
+    strength_ratio = passed_weight / total_weight if total_weight > 0 else 0
+    if strength_ratio >= 0.7:
+        atr_mult, rr_target = 1.0, 2.5
+    elif strength_ratio >= 0.5:
+        atr_mult, rr_target = 1.2, 2.0
+    else:
+        atr_mult, rr_target = 1.5, 1.5
+
+    # محاسبه استاپ و تارگت
+    if direction == "LONG":
+        stop_loss = price_30m - atr_val_30m * atr_mult
+        take_profit = price_30m + (price_30m - stop_loss) * rr_target
+    else:
+        stop_loss = price_30m + atr_val_30m * atr_mult
+        take_profit = price_30m - (stop_loss - price_30m) * rr_target
+
+    # دسته‌بندی ریسک نهایی
     core_rules = ["روند EMA 1h", "روند EMA 4h", "ADX", "RSI 30m"]
     core_passed = all(any(r.name == cr and r.passed for r in rule_results) for cr in core_rules)
-
     if core_passed:
         final_risk = "LOW"
     elif passed_weight >= total_weight * 0.5:
@@ -416,4 +459,5 @@ async def generate_signal(
         "passed_weight": passed_weight,
         "total_weight": total_weight
     }
+
 
