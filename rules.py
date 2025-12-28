@@ -194,14 +194,16 @@ def evaluate_rules(
 
     results: List[RuleResult] = []
 
-    # ۹ قانون قبلی
+    # قوانین پایه
     results.append(rule_body_strength(open_15m, close_15m, high_15m, low_15m, risk_rules))
-    results.append(rule_body_strength_5m(open_15m, close_15m, high_15m, low_15m, risk_rules))  # اگر 5m واقعی نداری، حذف کن
+    results.append(rule_body_strength_5m(open_15m, close_15m, high_15m, low_15m, risk_rules))
     results.append(rule_trend_1h(ema21_1h, ema55_1h, direction, risk_rules))
     results.append(rule_trend_4h(ema21_4h, ema55_4h, ema200_4h, direction, risk_rules))
-    results.append(rule_rsi(rsi_30m, direction, risk_rules))
-    results.append(rule_macd(macd_hist_30m, direction, risk_rules))
-    results.append(rule_entry_break(price_30m, ema21_30m, direction, risk_rules))
+    results.append(rule_rsi(rsi_30m, direction, risk_rules, risk))   # 👈 اصلاح شد
+    results.append(rule_macd(macd_hist_30m, direction, risk_rules, risk))  # 👈 اصلاح شد
+    results.append(rule_entry_break(price_30m, ema21_30m, direction, risk_rules, risk))  # 👈 اصلاح شد
+
+    # الگوها
     if prices_series_30m and len(prices_series_30m) >= 10:
         results.append(rule_ema_rejection(prices_series_30m, ema21_30m))
         results.append(rule_pullback(prices_series_30m, direction))
@@ -209,12 +211,12 @@ def evaluate_rules(
         results.append(RuleResult("EMA Rejection", False, "سری قیمت کافی نیست"))
         results.append(RuleResult("Pullback", False, "سری قیمت کافی نیست"))
 
-    # ۴ قانون جدید
+    # قوانین اندیکاتوری جدید
     if candles and isinstance(candles, list) and len(candles) >= 20:
-        results.append(rule_adx(candles, risk_rules, risk))
-        results.append(rule_cci(candles, risk_rules, risk))
-        results.append(rule_sar(candles, direction, risk_rules, risk))
-        results.append(rule_stochastic(candles, direction, risk_rules, risk))
+        results.append(rule_adx(candles, risk_rules, risk))       # 👈 اصلاح شد
+        results.append(rule_cci(candles, risk_rules, risk))       # 👈 اصلاح شد
+        results.append(rule_sar(candles, direction, risk_rules, risk))  # 👈 اصلاح شد
+        results.append(rule_stochastic(candles, direction, risk_rules, risk))  # 👈 اصلاح شد
     else:
         results.append(RuleResult("ADX", False, "داده کافی نیست"))
         results.append(RuleResult("CCI", False, "داده کافی نیست"))
@@ -223,6 +225,7 @@ def evaluate_rules(
 
     passed_count = sum(1 for r in results if r.passed)
     return results, passed_count
+
 
 # ===== تولید سیگنال =====
 async def generate_signal(
