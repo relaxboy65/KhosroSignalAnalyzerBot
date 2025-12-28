@@ -78,7 +78,7 @@ RISK_FACTORS = {
 INDICATOR_THRESHOLDS = {
     "ADX_STRONG": 25,   # روند قوی
     "ADX_WEAK": 20,     # روند ضعیف
-    "ADX_MEDIUM": 20 # 👈 اضافه کن
+    "ADX_MEDIUM": 20, # 👈 اضافه کن
     "CCI_OVERBOUGHT": 100,
     "CCI_OVERSOLD": -100,
     "STOCH_OVERBOUGHT": 80,
