@@ -69,16 +69,25 @@ RISK_PARAMS = {
 
 # 📊 وزن‌دهی فاکتورها برای هر سطح ریسک
 RISK_FACTORS = {
-    "LOW": {"ADX": 3, "CCI": 2, "SAR": 3, "Stoch": 2, "TF_Big": 4, "Patterns": 2, "RiskMgmt": 4},
-    "MEDIUM": {"ADX": 2, "CCI": 3, "SAR": 2, "Stoch": 3, "TF_Big": 3, "Patterns": 3, "RiskMgmt": 3},
-    "HIGH": {"ADX": 1, "CCI": 4, "SAR": 1, "Stoch": 4, "TF_Big": 1, "Patterns": 4, "RiskMgmt": 4}
+    "LOW": {
+        "ADX": 3, "CCI": 2, "SAR": 3, "Stoch": 2, "TF_Big": 4, "Patterns": 2, "RiskMgmt": 4,
+        "Volume": 2, "Candles": 2, "EMA": 2, "Confirm": 3, "Pressure": 3
+    },
+    "MEDIUM": {
+        "ADX": 2, "CCI": 3, "SAR": 2, "Stoch": 3, "TF_Big": 3, "Patterns": 3, "RiskMgmt": 3,
+        "Volume": 2, "Candles": 2, "EMA": 2, "Confirm": 3, "Pressure": 3
+    },
+    "HIGH": {
+        "ADX": 1, "CCI": 4, "SAR": 1, "Stoch": 4, "TF_Big": 1, "Patterns": 4, "RiskMgmt": 4,
+        "Volume": 1, "Candles": 1, "EMA": 1, "Confirm": 2, "Pressure": 2
+    }
 }
 
 # 📈 آستانه‌های اندیکاتورهای پیشرفته
 INDICATOR_THRESHOLDS = {
     "ADX_STRONG": 25,   # روند قوی
     "ADX_WEAK": 20,     # روند ضعیف
-    "ADX_MEDIUM": 20, # 👈 اضافه کن
+    "ADX_MEDIUM": 20,   # روند متوسط
     "CCI_OVERBOUGHT": 100,
     "CCI_OVERSOLD": -100,
     "STOCH_OVERBOUGHT": 80,
