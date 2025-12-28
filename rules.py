@@ -357,6 +357,7 @@ async def generate_signal(
     logger.info("=" * 80)
     logger.info(f"📊 سیگنال {symbol} | جهت={direction} | ریسک={final_risk}")
     logger.info(f"📈 قوانین پاس‌شده: وزن={passed_weight}/{total_weight}")
+    logger.info(f"📊 تعداد قوانین: پاس={len(passed_list)}, رد={len(failed_list)}, کل={len(rule_results)}")
     logger.info("📋 همه قوانین بررسی‌شده:")
     logger.info("\n".join([str(r) for r in rule_results]))
     logger.info("—" * 60)
