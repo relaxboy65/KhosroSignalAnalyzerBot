@@ -75,30 +75,59 @@ def rule_trend_4h(ema21_4h: float, ema55_4h: float, ema200_4h: float, direction:
     ok = (ema21_4h > ema55_4h and ema55_4h > ema200_4h) if direction == "LONG" else (ema21_4h < ema55_4h and ema55_4h < ema200_4h)
     return RuleResult("روند EMA 4h", ok, f"EMA21={ema21_4h:.2f}, EMA55={ema55_4h:.2f}, EMA200={ema200_4h:.2f}")
 
-def rule_rsi(rsi_30m: float, direction: str, risk_rules: dict) -> RuleResult:
-    th_count = risk_rules.get("rsi_threshold_count", 4)
-    ok = (rsi_30m > 50) if direction == "LONG" else (rsi_30m < 50)
-    return RuleResult("RSI 30m", ok, f"RSI={rsi_30m:.2f} [حد ≥ {th_count}]")
+def rule_rsi(rsi_30m: float, direction: str, risk_rules: dict, risk_level: str) -> RuleResult:
+    # آستانه‌ها بر اساس سطح ریسک
+    if risk_level == "LOW":
+        ok = (rsi_30m > 55) if direction == "LONG" else (rsi_30m < 45)
+    elif risk_level == "MEDIUM":
+        ok = (rsi_30m > 50) if direction == "LONG" else (rsi_30m < 50)
+    else:  # HIGH
+        ok = (rsi_30m > 45) if direction == "LONG" else (rsi_30m < 55)
 
-def rule_macd(macd_hist_30m, direction: str, risk_rules: dict) -> RuleResult:
-    th_count = risk_rules.get("macd_threshold_count", 4)
+    return RuleResult("RSI 30m", ok, f"RSI={rsi_30m:.2f} | سطح={risk_level}")
+
+
+def rule_macd(macd_hist_30m, direction: str, risk_rules: dict, risk_level: str) -> RuleResult:
     if isinstance(macd_hist_30m, list):
         macd_hist_30m = macd_hist_30m[-1] if macd_hist_30m else 0.0
-    ok = macd_hist_30m > 0 if direction == "LONG" else macd_hist_30m < 0
-    return RuleResult("MACD 30m", ok, f"MACD_hist={macd_hist_30m:.4f} [حد ≥ {th_count}]")
 
-def rule_entry_break(price_30m: float, ema21_30m: float, direction: str, risk_rules: dict) -> RuleResult:
-    th = risk_rules.get("entry_break_threshold", 0.0)
+    if risk_level == "LOW":
+        ok = (macd_hist_30m > 0.002) if direction == "LONG" else (macd_hist_30m < -0.002)
+    elif risk_level == "MEDIUM":
+        ok = (macd_hist_30m > 0) if direction == "LONG" else (macd_hist_30m < 0)
+    else:  # HIGH
+        ok = (macd_hist_30m >= -0.001) if direction == "LONG" else (macd_hist_30m <= 0.001)
+
+    return RuleResult("MACD 30m", ok, f"MACD_hist={macd_hist_30m:.4f} | سطح={risk_level}")
+
+
+def rule_entry_break(price_30m: float, ema21_30m: float, direction: str, risk_rules: dict, risk_level: str) -> RuleResult:
+    if risk_level == "LOW":
+        th = 0.0
+    elif risk_level == "MEDIUM":
+        th = 0.003
+    else:  # HIGH
+        th = 0.005   # انعطاف بیشتر برای ورود
+
     ok = price_30m > ema21_30m * (1 + th) if direction == "LONG" else price_30m < ema21_30m * (1 - th)
-    return RuleResult("شکست ورود", ok, f"Price={price_30m:.2f}, EMA21={ema21_30m:.2f}, Th={th}")
+    return RuleResult("شکست ورود", ok, f"Price={price_30m:.2f}, EMA21={ema21_30m:.2f}, Th={th} | سطح={risk_level}")
+
 
 # ===== قوانین جدید =====
 def rule_adx(candles: List[dict], risk_rules: dict, risk_level: str) -> RuleResult:
     adx_val = calculate_adx(candles)
-    th_strong = INDICATOR_THRESHOLDS["ADX_STRONG"]
-    weight = RISK_FACTORS[risk_level]["ADX"]
-    ok = (adx_val is not None and adx_val >= th_strong) if weight >= 2 else (adx_val is not None and adx_val >= INDICATOR_THRESHOLDS["ADX_WEAK"])
-    return RuleResult("ADX", ok, f"ADX={adx_val} [حد {('قوی ' + str(th_strong)) if weight>=2 else ('ضعیف ' + str(INDICATOR_THRESHOLDS['ADX_WEAK']))}]")
+    if adx_val is None:
+        return RuleResult("ADX", False, "داده کافی نیست")
+
+    if risk_level == "LOW":
+        th = INDICATOR_THRESHOLDS["ADX_STRONG"]
+    elif risk_level == "MEDIUM":
+        th = INDICATOR_THRESHOLDS["ADX_MEDIUM"]
+    else:  # HIGH
+        th = INDICATOR_THRESHOLDS["ADX_WEAK"]
+
+    ok = adx_val >= th
+    return RuleResult("ADX", ok, f"ADX={adx_val:.2f} [حد ≥ {th}] | سطح={risk_level}")
 
 def rule_cci(candles: List[dict], risk_rules: dict, risk_level: str) -> RuleResult:
     cci_val = calculate_cci(candles)
