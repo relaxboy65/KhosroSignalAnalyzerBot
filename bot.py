@@ -23,12 +23,14 @@ logger = logging.getLogger(__name__)
 KUCOIN_URL = "https://api.kucoin.com/api/v1/market/candles"
 
 intervals = {
+    "1m": "1min",
     "5m": "5min",
     "15m": "15min",
     "30m": "30min",
     "1h": "1hour",
     "4h": "4hour"
 }
+
 
 # ========== دریافت داده برای یک تایم‌فریم ==========
 async def fetch_timeframe(session, symbol, tf, days):
