@@ -293,12 +293,7 @@ def evaluate_rules(
         results.append(RuleResult("فشار فروش", True, "RSI<40, MACD-, EMA Reject"))
     else:
         results.append(RuleResult("فشار فروش", False, "شرایط کامل برقرار نیست"))
-
-    passed_weight = sum(RISK_FACTORS[risk].get(r.name.split()[0], 1) for r in results if r.passed)
-    total_weight = sum(RISK_FACTORS[risk].get(r.name.split()[0], 1) for r in results)
-    return results, passed_weight, total_weight
-
-    
+  
     # محاسبه وزن‌ها
     passed_weight = sum(RISK_FACTORS[risk].get(r.name.split()[0], 1) for r in results if r.passed)
     total_weight = sum(RISK_FACTORS[risk].get(r.name.split()[0], 1) for r in results)
