@@ -67,6 +67,7 @@ async def process_symbol(symbol, data, index, total):
         logger.info(f"[{index}/{total}] {symbol} — ❌ داده کافی نیست")
         return
 
+    # ===== EMAهای 30m =====
     closes_30 = [c['c'] for c in data["30m"]]
     ema21_30m = calculate_ema(closes_30, 21)
     ema55_30m = calculate_ema(closes_30, 55)
@@ -75,10 +76,16 @@ async def process_symbol(symbol, data, index, total):
     rsi_30m   = calculate_rsi(closes_30)
     atr_30m   = calculate_atr(data["30m"])
 
-    ema21_1h = None
-    ema55_1h = None
-    ema21_4h = None
-    ema55_4h = None
+    # ===== EMAهای 1h =====
+    closes_1h = [c['c'] for c in data.get("1h", [])]
+    ema21_1h = calculate_ema(closes_1h, 21) if closes_1h else None
+    ema55_1h = calculate_ema(closes_1h, 55) if closes_1h else None
+
+    # ===== EMAهای 4h =====
+    closes_4h = [c['c'] for c in data.get("4h", [])]
+    ema21_4h  = calculate_ema(closes_4h, 21) if closes_4h else None
+    ema55_4h  = calculate_ema(closes_4h, 55) if closes_4h else None
+    ema200_4h = calculate_ema(closes_4h, 200) if closes_4h else None
 
     direction = "LONG" if ema21_30m and ema55_30m and ema21_30m > ema55_30m else "SHORT"
 
@@ -93,19 +100,13 @@ async def process_symbol(symbol, data, index, total):
         low_15m=data.get("15m", [{}])[-1].get("l", closes_30[-1]),
         ema21_30m=ema21_30m, ema55_30m=ema55_30m, ema8_30m=ema8_30m,
         ema21_1h=ema21_1h, ema55_1h=ema55_1h,
-        ema21_4h=ema21_4h, ema55_4h=ema55_4h,
-        macd_line_5m=None, hist_5m=None,
-        macd_line_15m=None, hist_15m=None,
+        ema21_4h=ema21_4h, ema55_4h=ema55_4h, ema200_4h=ema200_4h,
         macd_line_30m=macd_30m.get("macd"), hist_30m=macd_30m.get("histogram"),
-        macd_line_1h=None, hist_1h=None,
-        macd_line_4h=None, hist_4h=None,
-        rsi_5m=None, rsi_15m=None, rsi_30m=rsi_30m, rsi_1h=None, rsi_4h=None,
+        rsi_30m=rsi_30m,
         atr_val_30m=atr_30m or 0.0,
         curr_vol=data["30m"][-1].get("v", 0.0),
         avg_vol_30m=0.0,
         divergence_detected=False,
-        check_result=None,
-        analysis_data=None,
         candles=data["30m"],
         prices_series_30m=closes_30[-120:]
     )
