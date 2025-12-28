@@ -394,12 +394,11 @@ async def generate_signal(
         f"تارگت: {take_profit:.4f}\n"
         f"زمان: {time_str}\n"
         f"──────────────\n"
-        f"📋 قوانین پاس‌شده ({passed_weight}/{total_weight} وزن):\n"
+        f"📋 قوانین پاس‌شده: وزن={passed_weight}/{total_weight} | تعداد={len(passed_list)}/{len(rule_results)}\n"
         + "\n".join([f"✅ {r.name} → {r.detail}" for r in rule_results if r.passed]) + "\n"
-        f"❌ قوانین ردشده:\n"
+        f"❌ قوانین ردشده ({len(failed_list)}):\n"
         + "\n".join([f"❌ {r.name} → {r.detail}" for r in rule_results if not r.passed])
     )
-
     await send_to_telegram(msg)
 
     return {
