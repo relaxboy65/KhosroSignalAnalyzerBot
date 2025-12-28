@@ -182,7 +182,7 @@ def evaluate_rules(
     open_15m: float, close_15m: float, high_15m: float, low_15m: float,
     ema21_30m: float, ema8_30m: float,
     ema21_1h: float, ema55_1h: float,
-    ema21_4h: float, ema55_4h: float, ema200_4h: float = 0.0,   # 👈 اضافه شد
+    ema21_4h: float, ema55_4h: float, ema200_4h: float = 0.0,
     macd_hist_30m: float = 0.0,
     rsi_30m: float = 50.0,
     vol_spike_factor: float = 1.0,
@@ -190,7 +190,11 @@ def evaluate_rules(
     candles: Optional[List[dict]] = None,
     closes_by_tf: Optional[dict] = None,
     prices_series_30m: Optional[List[float]] = None
-) -> Tuple[List[RuleResult], int]:
+) -> Tuple[List[RuleResult], int, int]:
+    """
+    اجرای همه قوانین و محاسبه وزن پاس‌شده/کل
+    خروجی: لیست نتایج قوانین + وزن پاس‌شده + وزن کل
+    """
 
     results: List[RuleResult] = []
 
@@ -198,7 +202,7 @@ def evaluate_rules(
     results.append(rule_body_strength(open_15m, close_15m, high_15m, low_15m, risk_rules))
     results.append(rule_body_strength_5m(open_15m, close_15m, high_15m, low_15m, risk_rules))
     results.append(rule_trend_1h(ema21_1h, ema55_1h, direction, risk_rules))
-    results.append(rule_trend_4h(ema21_4h, ema55_4h, ema200_4h, direction, risk_rules))  # 👈 حالا ema200_4h پاس داده می‌شود
+    results.append(rule_trend_4h(ema21_4h, ema55_4h, ema200_4h, direction, risk_rules))
     results.append(rule_rsi(rsi_30m, direction, risk_rules, risk))
     results.append(rule_macd(macd_hist_30m, direction, risk_rules, risk))
     results.append(rule_entry_break(price_30m, ema21_30m, direction, risk_rules, risk))
@@ -213,19 +217,21 @@ def evaluate_rules(
 
     # قوانین اندیکاتوری جدید
     if candles and isinstance(candles, list) and len(candles) >= 20:
-        results.append(rule_adx(candles, risk_rules, risk))       # 👈 اصلاح شد
-        results.append(rule_cci(candles, risk_rules, risk))       # 👈 اصلاح شد
-        results.append(rule_sar(candles, direction, risk_rules, risk))  # 👈 اصلاح شد
-        results.append(rule_stochastic(candles, direction, risk_rules, risk))  # 👈 اصلاح شد
+        results.append(rule_adx(candles, risk_rules, risk))
+        results.append(rule_cci(candles, risk_rules, risk))
+        results.append(rule_sar(candles, direction, risk_rules, risk))
+        results.append(rule_stochastic(candles, direction, risk_rules, risk))
     else:
         results.append(RuleResult("ADX", False, "داده کافی نیست"))
         results.append(RuleResult("CCI", False, "داده کافی نیست"))
         results.append(RuleResult("SAR", False, "داده کافی نیست"))
         results.append(RuleResult("Stochastic", False, "داده کافی نیست"))
 
-    passed_count = sum(1 for r in results if r.passed)
-    return results, passed_count
+    # محاسبه وزن‌ها
+    passed_weight = sum(RISK_FACTORS[risk].get(r.name.split()[0], 1) for r in results if r.passed)
+    total_weight = sum(RISK_FACTORS[risk].get(r.name.split()[0], 1) for r in results)
 
+    return results, passed_weight, total_weight
 
 # ===== تولید سیگنال =====
 async def generate_signal(
@@ -236,7 +242,7 @@ async def generate_signal(
     open_15m: float, close_15m: float, high_15m: float, low_15m: float,
     ema21_30m: float, ema55_30m: float, ema8_30m: float,
     ema21_1h: float, ema55_1h: float,
-    ema21_4h: float, ema55_4h: float, ema200_4h: float = 0.0,   # 👈 پیش‌فرض دارد
+    ema21_4h: float, ema55_4h: float, ema200_4h: float = 0.0,
     macd_line_5m: float = None, hist_5m: float = None,
     macd_line_15m: float = None, hist_15m: float = None,
     macd_line_30m: float = None, hist_30m: float = None,
@@ -270,9 +276,9 @@ async def generate_signal(
     if isinstance(hist_30m, list):
         hist_30m = hist_30m[-1] if hist_30m else 0.0
 
-    # اجرای قوانین
+    # اجرای قوانین با وزن‌دهی
     risk_rules = next((r["rules"] for r in RISK_LEVELS if r["key"] == prefer_risk), RISK_LEVELS[1]["rules"])
-    rule_results, passed_count = evaluate_rules(
+    rule_results, passed_weight, total_weight = evaluate_rules(
         symbol=symbol,
         direction=direction,
         risk=prefer_risk,
@@ -291,28 +297,25 @@ async def generate_signal(
         prices_series_30m=prices_series_30m
     )
 
-    adv = ADVANCED_RISK_PARAMS.get(prefer_risk, ADVANCED_RISK_PARAMS["MEDIUM"])
-    stop_factor = adv["stop_loss_factor"]
-    tp_factor = adv["take_profit_factor"]
-    signal_strength = adv["signal_strength"]
+    # دسته‌بندی ریسک پویا
+    core_rules = ["روند EMA 1h", "روند EMA 4h", "ADX", "RSI 30m"]
+    core_passed = all(any(r.name == cr and r.passed for r in rule_results) for cr in core_rules)
 
-    if direction == "LONG":
-        stop_loss = price_30m - atr_val_30m * atr_mult * stop_factor
-        take_profit = price_30m + (price_30m - stop_loss) * rr_target * tp_factor
+    if core_passed:
+        final_risk = "LOW"
+    elif passed_weight >= total_weight * 0.5:
+        final_risk = "MEDIUM"
     else:
-        stop_loss = price_30m + atr_val_30m * atr_mult * stop_factor
-        take_profit = price_30m - (stop_loss - price_30m) * rr_target * tp_factor
+        final_risk = "HIGH"
 
-    min_pass = max(4, len(rule_results) // 2)
-    status = "SIGNAL" if passed_count >= min_pass else "NO_SIGNAL"
-
+    status = "SIGNAL" if passed_weight >= total_weight * 0.5 else "NO_SIGNAL"
     # 📊 لاگ کامل
     passed_list = [str(r) for r in rule_results if r.passed]
     failed_list = [str(r) for r in rule_results if not r.passed]
 
     logger.info("=" * 80)
-    logger.info(f"📊 سیگنال {symbol} | جهت={direction} | ریسک={prefer_risk}")
-    logger.info(f"📈 قوانین پاس‌شده: {passed_count}/{len(rule_results)}")
+    logger.info(f"📊 سیگنال {symbol} | جهت={direction} | ریسک={final_risk}")
+    logger.info(f"📈 قوانین پاس‌شده: وزن={passed_weight}/{total_weight}")
     for r in rule_results:
         logger.info(str(r))
     logger.info("—" * 60)
@@ -324,49 +327,28 @@ async def generate_signal(
     logger.info(f"🎯 استاپ: {stop_loss:.4f} | تارگت: {take_profit:.4f}")
     logger.info("=" * 80)
 
-    # ساخت متن کامل برای ستون signal_source
-    rules_passed = [r.name for r in rule_results if r.passed]
-    passed_str = ";".join(rules_passed) if rules_passed else ""
-    reasons_str = "|".join([r.detail for r in rule_results]) if rule_results else ""
-
-    details_source = (
-        f"Dir={direction}"
-        f" | TF_EMA=30m:EMA21={ema21_30m:.6f},30m:EMA55={ema55_30m:.6f},"
-        f"1h:EMA21={ema21_1h if ema21_1h else 'NA'},1h:EMA55={ema55_1h if ema55_1h else 'NA'},"
-        f"4h:EMA21={ema21_4h if ema21_4h else 'NA'},4h:EMA55={ema55_4h if ema55_4h else 'NA'}"
-        f" | TF_RSI=30m:RSI={rsi_30m:.2f}"
-        f" | TF_MACD=30m:MACD={macd_line_30m if macd_line_30m else 'NA'},30m:HIST={hist_30m if hist_30m else 'NA'}"
-        f" | BS15={abs(close_15m-open_15m)/max(high_15m-low_15m,1e-6):.3f}"
-        f" | RulesPassed={passed_str}"
-        f" | Reasons={reasons_str}"
-    )
-
     # ذخیره در CSV
     append_signal_row(
         symbol=symbol,
         direction=direction,
-        risk_level_name=prefer_risk,
+        risk_level_name=final_risk,
         entry_price=price_30m,
         stop_loss=stop_loss,
         take_profit=take_profit,
         issued_at_tehran=time_str,
-        signal_source=details_source,
+        signal_source=";".join([str(r) for r in rule_results]),
         position_size_usd=10.0
     )
 
-    # ارسال تلگرام با دلایل (فقط وقتی سیگنال معتبر باشد)
-    # آیکون جهت معامله
+    # ارسال تلگرام
     dir_icon = "🟢" if direction == "LONG" else "🔴"
-    
-    # مدل ریسک مفهومی‌تر
     risk_icon_map = {
         "LOW": "🛡️ محافظه‌کار",
         "MEDIUM": "⚖️ متعادل",
         "HIGH": "🔥 تهاجمی"
     }
-    risk_label = risk_icon_map.get(prefer_risk, "⚖️ متعادل")
-    
-    # ساخت پیام تلگرام
+    risk_label = risk_icon_map.get(final_risk, "⚖️ متعادل")
+
     msg = (
         f"──────────────\n"
         f"📊 سیگنال {symbol}\n"
@@ -377,28 +359,28 @@ async def generate_signal(
         f"تارگت: {take_profit:.4f}\n"
         f"زمان: {time_str}\n"
         f"──────────────\n"
-        f"📋 قوانین پاس‌شده ({passed_count}/{len(rule_results)}):\n"
+        f"📋 قوانین پاس‌شده ({passed_weight}/{total_weight} وزن):\n"
         + "\n".join([f"✅ {r.name} → {r.detail}" for r in rule_results if r.passed]) + "\n"
         f"❌ قوانین ردشده:\n"
         + "\n".join([f"❌ {r.name} → {r.detail}" for r in rule_results if not r.passed])
     )
 
-    await send_to_telegram(msg)   # 👈 اینجا باید هم‌سطح باشه
-
+    await send_to_telegram(msg)
 
     return {
         "symbol": symbol,
         "direction": direction,
-        "risk": prefer_risk,
+        "risk": final_risk,
         "status": status,
-        "strength": signal_strength if status == "SIGNAL" else None,
+        "strength": passed_weight / total_weight if status == "SIGNAL" else None,
         "price": price_30m,
         "stop_loss": stop_loss,
         "take_profit": take_profit,
         "time": time_str,
-        "signal_source": details_source,   # 👈 اینجا باید details_source باشد
+        "signal_source": ";".join([str(r) for r in rule_results]),
         "details": [str(r) for r in rule_results],
-        "passed_count": passed_count,
-        "total_rules": len(rule_results)
+        "passed_weight": passed_weight,
+        "total_weight": total_weight
     }
+
 
