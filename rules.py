@@ -236,7 +236,7 @@ async def generate_signal(
     open_15m: float, close_15m: float, high_15m: float, low_15m: float,
     ema21_30m: float, ema55_30m: float, ema8_30m: float,
     ema21_1h: float, ema55_1h: float,
-    ema21_4h: float, ema55_4h: float, ema200_4h: float = 0.0,   # 👈 اضافه شد
+    ema21_4h: float, ema55_4h: float, ema200_4h: float,
     macd_line_5m: float, hist_5m,
     macd_line_15m: float, hist_15m,
     macd_line_30m: float, hist_30m,
