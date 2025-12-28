@@ -182,7 +182,7 @@ def evaluate_rules(
     open_15m: float, close_15m: float, high_15m: float, low_15m: float,
     ema21_30m: float, ema8_30m: float,
     ema21_1h: float, ema55_1h: float,
-    ema21_4h: float, ema55_4h: float, ema200_4h: float = 0.0,
+    ema21_4h: float, ema55_4h: float, ema200_4h: float = 0.0,   # 👈 اضافه شد
     macd_hist_30m: float = 0.0,
     rsi_30m: float = 50.0,
     vol_spike_factor: float = 1.0,
@@ -198,10 +198,10 @@ def evaluate_rules(
     results.append(rule_body_strength(open_15m, close_15m, high_15m, low_15m, risk_rules))
     results.append(rule_body_strength_5m(open_15m, close_15m, high_15m, low_15m, risk_rules))
     results.append(rule_trend_1h(ema21_1h, ema55_1h, direction, risk_rules))
-    results.append(rule_trend_4h(ema21_4h, ema55_4h, ema200_4h, direction, risk_rules))
-    results.append(rule_rsi(rsi_30m, direction, risk_rules, risk))   # 👈 اصلاح شد
-    results.append(rule_macd(macd_hist_30m, direction, risk_rules, risk))  # 👈 اصلاح شد
-    results.append(rule_entry_break(price_30m, ema21_30m, direction, risk_rules, risk))  # 👈 اصلاح شد
+    results.append(rule_trend_4h(ema21_4h, ema55_4h, ema200_4h, direction, risk_rules))  # 👈 حالا ema200_4h پاس داده می‌شود
+    results.append(rule_rsi(rsi_30m, direction, risk_rules, risk))
+    results.append(rule_macd(macd_hist_30m, direction, risk_rules, risk))
+    results.append(rule_entry_break(price_30m, ema21_30m, direction, risk_rules, risk))
 
     # الگوها
     if prices_series_30m and len(prices_series_30m) >= 10:
@@ -236,7 +236,7 @@ async def generate_signal(
     open_15m: float, close_15m: float, high_15m: float, low_15m: float,
     ema21_30m: float, ema55_30m: float, ema8_30m: float,
     ema21_1h: float, ema55_1h: float,
-    ema21_4h: float, ema55_4h: float,
+    ema21_4h: float, ema55_4h: float, ema200_4h: float = 0.0,   # 👈 اضافه شد
     macd_line_5m: float, hist_5m,
     macd_line_15m: float, hist_15m,
     macd_line_30m: float, hist_30m,
@@ -280,7 +280,7 @@ async def generate_signal(
         open_15m=open_15m, close_15m=close_15m, high_15m=high_15m, low_15m=low_15m,
         ema21_30m=ema21_30m, ema8_30m=ema8_30m,
         ema21_1h=ema21_1h, ema55_1h=ema55_1h,
-        ema21_4h=ema21_4h, ema55_4h=ema55_4h, ema200_4h=0.0,
+        ema21_4h=ema21_4h, ema55_4h=ema55_4h, ema200_4h=ema200_4h,
         macd_hist_30m=hist_30m,
         rsi_30m=rsi_30m,
         vol_spike_factor=1.0,
