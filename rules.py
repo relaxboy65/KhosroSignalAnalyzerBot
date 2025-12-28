@@ -131,11 +131,18 @@ def rule_adx(candles: List[dict], risk_rules: dict, risk_level: str) -> RuleResu
 
 def rule_cci(candles: List[dict], risk_rules: dict, risk_level: str) -> RuleResult:
     cci_val = calculate_cci(candles)
-    th_over = INDICATOR_THRESHOLDS["CCI_OVERBOUGHT"]
-    th_under = INDICATOR_THRESHOLDS["CCI_OVERSOLD"]
-    weight = RISK_FACTORS[risk_level]["CCI"]
-    ok = (cci_val is not None and ((cci_val > th_over) or (cci_val < th_under))) if weight >= 3 else (cci_val is not None and abs(cci_val) > 50)
-    return RuleResult("CCI", ok, f"CCI={cci_val} [±{th_under}/{th_over}] (وزن={weight})")
+    if cci_val is None:
+        return RuleResult("CCI", False, "داده کافی نیست")
+
+    if risk_level == "LOW":
+        ok = abs(cci_val) >= 100   # سخت‌گیرانه
+    elif risk_level == "MEDIUM":
+        ok = abs(cci_val) >= 75    # متوسط
+    else:  # HIGH
+        ok = abs(cci_val) >= 50    # انعطاف‌پذیر
+
+    return RuleResult("CCI", ok, f"CCI={cci_val:.2f} | سطح={risk_level}")
+
 
 def rule_sar(candles: List[dict], direction: str, risk_rules: dict, risk_level: str) -> RuleResult:
     sar_val = calculate_sar(candles)
@@ -145,13 +152,21 @@ def rule_sar(candles: List[dict], direction: str, risk_rules: dict, risk_level: 
 
 def rule_stochastic(candles: List[dict], direction: str, risk_rules: dict, risk_level: str) -> RuleResult:
     k, d = calculate_stochastic(candles)
-    th_over = INDICATOR_THRESHOLDS["STOCH_OVERBOUGHT"]
-    th_under = INDICATOR_THRESHOLDS["STOCH_OVERSOLD"]
-    weight = RISK_FACTORS[risk_level]["Stoch"]
     if k is None or d is None:
         return RuleResult("Stochastic", False, "K/D=None")
-    ok = ((k < th_under and d < th_under) or (weight <= 2 and k > d)) if direction == "LONG" else ((k > th_over and d > th_over) or (weight <= 2 and k < d))
-    return RuleResult("Stochastic", ok, f"K={k}, D={d}, Dir={direction} [±{th_under}/{th_over}] (وزن={weight})")
+
+    if risk_level == "LOW":
+        # فقط وقتی در محدوده اشباع (بالای 80 یا پایین 20) باشه
+        ok = (k < 20 and d < 20) if direction == "LONG" else (k > 80 and d > 80)
+    elif risk_level == "MEDIUM":
+        # محدوده کمی بازتر (25/75)
+        ok = (k < 25 and d < 25) if direction == "LONG" else (k > 75 and d > 75)
+    else:  # HIGH
+        # انعطاف بیشتر: یا محدوده 30/70 یا تقاطع K/D
+        ok = ((k < 30 and d < 30) or (k > d)) if direction == "LONG" else ((k > 70 and d > 70) or (k < d))
+
+    return RuleResult("Stochastic", ok, f"K={k:.2f}, D={d:.2f}, Dir={direction} | سطح={risk_level}")
+
 
 # ===== الگوهای کلاسیک =====
 def rule_ema_rejection(prices: List[float], ema_val: float) -> RuleResult:
@@ -227,11 +242,30 @@ def evaluate_rules(
         results.append(RuleResult("SAR", False, "داده کافی نیست"))
         results.append(RuleResult("Stochastic", False, "داده کافی نیست"))
 
+    # قوانین تکمیلی
+    if prices_series_30m and candles:
+        results.append(rule_resistance(prices_series_30m, candles))
+        results.append(rule_double(prices_series_30m))
+    else:
+        results.append(RuleResult("Resistance Test", False, "داده کافی نیست"))
+        results.append(RuleResult("Double Top/Bottom", False, "داده کافی نیست"))
+
+    if vol_spike_factor > 1.5:
+        results.append(RuleResult("Volume Spike", True, f"Factor={vol_spike_factor:.2f}"))
+    else:
+        results.append(RuleResult("Volume Spike", False, f"Factor={vol_spike_factor:.2f}"))
+
+    if divergence_detected:
+        results.append(RuleResult("Divergence", True, "واگرایی شناسایی شد"))
+    else:
+        results.append(RuleResult("Divergence", False, "واگرایی وجود ندارد"))
+
     # محاسبه وزن‌ها
     passed_weight = sum(RISK_FACTORS[risk].get(r.name.split()[0], 1) for r in results if r.passed)
     total_weight = sum(RISK_FACTORS[risk].get(r.name.split()[0], 1) for r in results)
 
     return results, passed_weight, total_weight
+
 
 # ===== تولید سیگنال =====
 async def generate_signal(
@@ -309,6 +343,7 @@ async def generate_signal(
         final_risk = "HIGH"
 
     status = "SIGNAL" if passed_weight >= total_weight * 0.5 else "NO_SIGNAL"
+
     # 📊 لاگ کامل
     passed_list = [str(r) for r in rule_results if r.passed]
     failed_list = [str(r) for r in rule_results if not r.passed]
@@ -382,5 +417,3 @@ async def generate_signal(
         "passed_weight": passed_weight,
         "total_weight": total_weight
     }
-
-
