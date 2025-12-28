@@ -198,9 +198,11 @@ def evaluate_rules(
     open_15m: float, close_15m: float, high_15m: float, low_15m: float,
     # 5m
     open_5m: float, close_5m: float, high_5m: float, low_5m: float,
-    ema21_30m: float, ema8_30m: float,
-    ema21_1h: float, ema55_1h: float,
-    ema21_4h: float, ema55_4h: float, ema200_4h: float = 0.0,
+    # 1m
+    open_1m: float = None, close_1m: float = None, high_1m: float = None, low_1m: float = None,
+    ema21_30m: float = None, ema8_30m: float = None,
+    ema21_1h: float = None, ema55_1h: float = None,
+    ema21_4h: float = None, ema55_4h: float = None, ema200_4h: float = 0.0,
     macd_hist_30m: float = 0.0,
     rsi_30m: float = 50.0,
     vol_spike_factor: float = 1.0,
