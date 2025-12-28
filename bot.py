@@ -56,7 +56,8 @@ async def fetch_timeframe(session, symbol, tf, days):
 
 # ========== دریافت همه تایم‌فریم‌ها ==========
 async def fetch_all_timeframes(session, symbol):
-    settings = {"5m": 7, "15m": 7, "30m": 14, "1h": 30, "4h": 60}
+    # اضافه کردن تایم‌فریم 1m
+    settings = {"1m": 2, "5m": 7, "15m": 7, "30m": 14, "1h": 30, "4h": 60}
     tasks = [fetch_timeframe(session, symbol, tf, days) for tf, days in settings.items()]
     results = await asyncio.gather(*tasks)
     return {tf: candles for tf, candles in results if candles}
@@ -67,7 +68,6 @@ async def process_symbol(symbol, data, index, total):
         logger.info(f"[{index}/{total}] {symbol} — ❌ داده کافی نیست")
         return
 
-    # ===== EMAهای 30m =====
     closes_30 = [c['c'] for c in data["30m"]]
     ema21_30m = calculate_ema(closes_30, 21)
     ema55_30m = calculate_ema(closes_30, 55)
@@ -76,23 +76,22 @@ async def process_symbol(symbol, data, index, total):
     rsi_30m   = calculate_rsi(closes_30)
     atr_30m   = calculate_atr(data["30m"])
 
-    # ===== EMAهای 1h =====
+    # کندل‌های 1m و 5m
+    candle_1m = data.get("1m", [{}])[-1]
+    open_1m, close_1m, high_1m, low_1m = candle_1m.get("o"), candle_1m.get("c"), candle_1m.get("h"), candle_1m.get("l")
+
+    candle_5m = data.get("5m", [{}])[-1]
+    open_5m, close_5m, high_5m, low_5m = candle_5m.get("o"), candle_5m.get("c"), candle_5m.get("h"), candle_5m.get("l")
+
+    # EMAهای 1h و 4h
     closes_1h = [c['c'] for c in data.get("1h", [])]
     ema21_1h = calculate_ema(closes_1h, 21) if closes_1h else None
     ema55_1h = calculate_ema(closes_1h, 55) if closes_1h else None
 
-    # ===== EMAهای 4h =====
     closes_4h = [c['c'] for c in data.get("4h", [])]
     ema21_4h  = calculate_ema(closes_4h, 21) if closes_4h else None
     ema55_4h  = calculate_ema(closes_4h, 55) if closes_4h else None
     ema200_4h = calculate_ema(closes_4h, 200) if closes_4h else None
-
-    # ===== کندل 5m =====
-    candle_5m = data.get("5m", [{}])[-1]
-    open_5m  = candle_5m.get("o", closes_30[-1])
-    close_5m = candle_5m.get("c", closes_30[-1])
-    high_5m  = candle_5m.get("h", closes_30[-1])
-    low_5m   = candle_5m.get("l", closes_30[-1])
 
     direction = "LONG" if ema21_30m and ema55_30m and ema21_30m > ema55_30m else "SHORT"
 
@@ -108,6 +107,8 @@ async def process_symbol(symbol, data, index, total):
         low_15m=data.get("15m", [{}])[-1].get("l", closes_30[-1]),
         # 5m
         open_5m=open_5m, close_5m=close_5m, high_5m=high_5m, low_5m=low_5m,
+        # 1m
+        open_1m=open_1m, close_1m=close_1m, high_1m=high_1m, low_1m=low_1m,
         # EMAها
         ema21_30m=ema21_30m, ema55_30m=ema55_30m, ema8_30m=ema8_30m,
         ema21_1h=ema21_1h, ema55_1h=ema55_1h,
@@ -119,7 +120,8 @@ async def process_symbol(symbol, data, index, total):
         avg_vol_30m=0.0,
         divergence_detected=False,
         candles=data["30m"],
-        prices_series_30m=closes_30[-120:]
+        prices_series_30m=closes_30[-120:],
+        closes_by_tf=data
     )
 
     if signal and signal.get("status") == "SIGNAL":
