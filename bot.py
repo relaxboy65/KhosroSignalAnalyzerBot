@@ -87,6 +87,13 @@ async def process_symbol(symbol, data, index, total):
     ema55_4h  = calculate_ema(closes_4h, 55) if closes_4h else None
     ema200_4h = calculate_ema(closes_4h, 200) if closes_4h else None
 
+    # ===== کندل 5m =====
+    candle_5m = data.get("5m", [{}])[-1]
+    open_5m  = candle_5m.get("o", closes_30[-1])
+    close_5m = candle_5m.get("c", closes_30[-1])
+    high_5m  = candle_5m.get("h", closes_30[-1])
+    low_5m   = candle_5m.get("l", closes_30[-1])
+
     direction = "LONG" if ema21_30m and ema55_30m and ema21_30m > ema55_30m else "SHORT"
 
     signal = await generate_signal(
@@ -94,10 +101,14 @@ async def process_symbol(symbol, data, index, total):
         direction=direction,
         prefer_risk="MEDIUM",
         price_30m=closes_30[-1],
+        # 15m
         open_15m=data.get("15m", [{}])[-1].get("o", closes_30[-1]),
         close_15m=data.get("15m", [{}])[-1].get("c", closes_30[-1]),
         high_15m=data.get("15m", [{}])[-1].get("h", closes_30[-1]),
         low_15m=data.get("15m", [{}])[-1].get("l", closes_30[-1]),
+        # 5m
+        open_5m=open_5m, close_5m=close_5m, high_5m=high_5m, low_5m=low_5m,
+        # EMAها
         ema21_30m=ema21_30m, ema55_30m=ema55_30m, ema8_30m=ema8_30m,
         ema21_1h=ema21_1h, ema55_1h=ema55_1h,
         ema21_4h=ema21_4h, ema55_4h=ema55_4h, ema200_4h=ema200_4h,
@@ -115,6 +126,7 @@ async def process_symbol(symbol, data, index, total):
         logger.info(f"✅ سیگنال {symbol}: {signal['direction']} | قیمت={signal['price']:.4f}")
     else:
         logger.info(f"📭 بدون سیگنال معتبر برای {symbol}")
+
 
 # ========== تابع اصلی ==========
 async def main_async():
