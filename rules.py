@@ -348,11 +348,17 @@ async def generate_signal(
     passed_list = [str(r) for r in rule_results if r.passed]
     failed_list = [str(r) for r in rule_results if not r.passed]
 
+
+
+
+
+
+    
     logger.info("=" * 80)
     logger.info(f"📊 سیگنال {symbol} | جهت={direction} | ریسک={final_risk}")
     logger.info(f"📈 قوانین پاس‌شده: وزن={passed_weight}/{total_weight}")
-    for r in rule_results:
-        logger.info(str(r))
+    logger.info("📋 همه قوانین بررسی‌شده:")
+    logger.info("\n".join([str(r) for r in rule_results]))
     logger.info("—" * 60)
     logger.info("✅ قوانین پاس‌شده:")
     logger.info("\n".join(passed_list) if passed_list else "هیچ‌کدام")
