@@ -194,7 +194,10 @@ def evaluate_rules(
     risk: str,
     risk_rules: dict,
     price_30m: float,
+    # 15m
     open_15m: float, close_15m: float, high_15m: float, low_15m: float,
+    # 5m
+    open_5m: float, close_5m: float, high_5m: float, low_5m: float,
     ema21_30m: float, ema8_30m: float,
     ema21_1h: float, ema55_1h: float,
     ema21_4h: float, ema55_4h: float, ema200_4h: float = 0.0,
@@ -215,7 +218,7 @@ def evaluate_rules(
 
     # قوانین پایه
     results.append(rule_body_strength(open_15m, close_15m, high_15m, low_15m, risk_rules))
-    results.append(rule_body_strength_5m(open_15m, close_15m, high_15m, low_15m, risk_rules))
+    results.append(rule_body_strength_5m(open_5m, close_5m, high_5m, low_5m, risk_rules))  # ✅ اصلاح شد
     results.append(rule_trend_1h(ema21_1h, ema55_1h, direction, risk_rules))
     results.append(rule_trend_4h(ema21_4h, ema55_4h, ema200_4h, direction, risk_rules))
     results.append(rule_rsi(rsi_30m, direction, risk_rules, risk))
@@ -273,30 +276,26 @@ async def generate_signal(
     direction: str,
     prefer_risk: str,
     price_30m: float,
+    # 15m
     open_15m: float, close_15m: float, high_15m: float, low_15m: float,
+    # 5m
+    open_5m: float, close_5m: float, high_5m: float, low_5m: float,
     ema21_30m: float, ema55_30m: float, ema8_30m: float,
     ema21_1h: float, ema55_1h: float,
     ema21_4h: float, ema55_4h: float, ema200_4h: float = 0.0,
-    macd_line_5m: float = None, hist_5m: float = None,
-    macd_line_15m: float = None, hist_15m: float = None,
     macd_line_30m: float = None, hist_30m: float = None,
-    macd_line_1h: float = None, hist_1h: float = None,
-    macd_line_4h: float = None, hist_4h: float = None,
-    rsi_5m: float = None, rsi_15m: float = None, rsi_30m: float = None,
-    rsi_1h: float = None, rsi_4h: float = None,
+    rsi_30m: float = None,
     atr_val_30m: float = 0.0,
     curr_vol: float = 0.0,
     avg_vol_30m: float = 0.0,
     divergence_detected: bool = False,
-    check_result=None,
-    analysis_data=None,
     candles: Optional[List[dict]] = None,
     prices_series_30m: Optional[List[float]] = None
 ):
     tehran_now = datetime.now(ZoneInfo("Asia/Tehran"))
     time_str = tehran_time_str(tehran_now)
 
-    # محاسبه SL/TP اولیه
+    # محاسبه SL/TP
     atr_mult = RISK_PARAMS.get("atr_multiplier", 1.2)
     rr_target = RISK_PARAMS.get("rr_target", 2.0)
 
@@ -310,7 +309,7 @@ async def generate_signal(
     if isinstance(hist_30m, list):
         hist_30m = hist_30m[-1] if hist_30m else 0.0
 
-    # اجرای قوانین با وزن‌دهی
+    # اجرای قوانین
     risk_rules = next((r["rules"] for r in RISK_LEVELS if r["key"] == prefer_risk), RISK_LEVELS[1]["rules"])
     rule_results, passed_weight, total_weight = evaluate_rules(
         symbol=symbol,
@@ -319,6 +318,7 @@ async def generate_signal(
         risk_rules=risk_rules,
         price_30m=price_30m,
         open_15m=open_15m, close_15m=close_15m, high_15m=high_15m, low_15m=low_15m,
+        open_5m=open_5m, close_5m=close_5m, high_5m=high_5m, low_5m=low_5m,  # ✅ اضافه شد
         ema21_30m=ema21_30m, ema8_30m=ema8_30m,
         ema21_1h=ema21_1h, ema55_1h=ema55_1h,
         ema21_4h=ema21_4h, ema55_4h=ema55_4h, ema200_4h=ema200_4h,
@@ -327,7 +327,6 @@ async def generate_signal(
         vol_spike_factor=1.0,
         divergence_detected=divergence_detected,
         candles=candles,
-        closes_by_tf=None,
         prices_series_30m=prices_series_30m
     )
 
@@ -348,12 +347,6 @@ async def generate_signal(
     passed_list = [str(r) for r in rule_results if r.passed]
     failed_list = [str(r) for r in rule_results if not r.passed]
 
-
-
-
-
-
-    
     logger.info("=" * 80)
     logger.info(f"📊 سیگنال {symbol} | جهت={direction} | ریسک={final_risk}")
     logger.info(f"📈 قوانین پاس‌شده: وزن={passed_weight}/{total_weight}")
@@ -424,3 +417,4 @@ async def generate_signal(
         "passed_weight": passed_weight,
         "total_weight": total_weight
     }
+
