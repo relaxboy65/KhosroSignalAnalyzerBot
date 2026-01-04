@@ -191,7 +191,7 @@ def rule_double(prices: List[float]) -> RuleResult:
 def map_rule_to_factor(rule_name: str) -> str:
     name = rule_name.strip()
 
-    # قوانین جدید 1m
+    # ===== قوانین جدید 1m =====
     if "حجم لحظه‌ای" in name:
         return "Volume"
     if "کندل‌های متوالی" in name:
@@ -199,13 +199,13 @@ def map_rule_to_factor(rule_name: str) -> str:
     if "EMA کراس سریع" in name:
         return "EMA"
 
-    # قوانین ترکیبی
+    # ===== قوانین ترکیبی =====
     if "تأیید روند" in name:
         return "Confirm"
     if "فشار فروش" in name:
         return "Pressure"
 
-    # اندیکاتورها
+    # ===== اندیکاتورها =====
     if name.startswith("ADX"):
         return "ADX"
     if name.startswith("CCI"):
@@ -215,7 +215,7 @@ def map_rule_to_factor(rule_name: str) -> str:
     if name.startswith("Stochastic"):
         return "Stoch"
 
-    # الگوها
+    # ===== الگوها =====
     if "Double" in name or "Top" in name or "Bottom" in name:
         return "Patterns"
     if "Resistance" in name:
@@ -225,7 +225,7 @@ def map_rule_to_factor(rule_name: str) -> str:
     if "Pullback" in name:
         return "Patterns"
 
-    # قوانین پایه → RiskMgmt
+    # ===== قوانین پایه (RiskMgmt) =====
     if "قدرت کندل" in name:
         return "RiskMgmt"
     if "روند EMA" in name:
@@ -237,14 +237,15 @@ def map_rule_to_factor(rule_name: str) -> str:
     if "شکست ورود" in name:
         return "RiskMgmt"
 
-    # حجم و واگرایی
+    # ===== حجم و واگرایی =====
     if "Volume Spike" in name:
         return "Volume"
     if "Divergence" in name:
         return "RiskMgmt"
 
-    # پیش‌فرض
+    # ===== پیش‌فرض =====
     return "RiskMgmt"
+
 
 def evaluate_rules(
     symbol: str,
@@ -354,7 +355,6 @@ def evaluate_rules(
             passed_weight += weight
 
     return results, passed_weight, total_weight
-
 # ===== تولید سیگنال =====
 async def generate_signal(
     symbol: str,
