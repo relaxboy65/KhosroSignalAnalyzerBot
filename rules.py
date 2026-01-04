@@ -169,14 +169,17 @@ def rule_stochastic(candles: List[dict], direction: str, risk_rules: dict, risk_
 
 
 def map_rule_to_factor(rule_name: str) -> str:
-    name = rule_name.strip()
+    # نرمال‌سازی: حذف نیم‌فاصله (ZWNJ)، trim، و نسخه lowercase
+    name = (rule_name or "").replace("‌", " ").strip()
+    lower = name.lower()
 
-    # ===== قوانین جدید 1m =====
-    if "حجم لحظه‌ای" in name:
+    # ===== قوانین 1m =====
+    if ("حجم لحظه‌ای" in name) or ("1m" in name and "حجم" in name):
         return "Volume"
     if "کندل‌های متوالی" in name:
         return "Candles"
-    if "EMA کراس سریع" in name:
+    # تطابق انعطاف‌پذیر برای EMA کراس
+    if ("ema کراس سریع" in lower) or ("ema کراس" in lower) or ("کراس سریع" in name) or ("ema کراس" in name):
         return "EMA"
 
     # ===== قوانین ترکیبی =====
@@ -196,9 +199,10 @@ def map_rule_to_factor(rule_name: str) -> str:
         return "Stoch"
 
     # ===== الگوها =====
-    if "Double" in name or "Top" in name or "Bottom" in name:
+    # دقیقاً همان‌هایی که در لاگ می‌آید
+    if ("Double Top/Bottom" in name) or ("Double" in name) or ("Top" in name) or ("Bottom" in name):
         return "Patterns"
-    if "Resistance" in name:
+    if ("Resistance Test" in name) or ("Resistance" in name):
         return "Patterns"
     if "EMA Rejection" in name:
         return "Patterns"
@@ -223,8 +227,8 @@ def map_rule_to_factor(rule_name: str) -> str:
     if "Divergence" in name:
         return "RiskMgmt"
 
-    # ===== پیش‌فرض =====
     return "RiskMgmt"
+
 
 # ===== الگوهای کلاسیک =====
 def rule_ema_rejection(prices: List[float], ema_val: float) -> RuleResult:
@@ -346,14 +350,19 @@ def evaluate_rules(
     passed_weight = 0
     total_weight = 0
 
+    # چاپ مقادیر واقعی وزن‌ها برای این سطح ریسک
+    try:
+        logger.debug(f"RISK_FACTORS[{risk}] = {RISK_FACTORS.get(risk, {})}")
+    except Exception:
+        pass
+
     for r in results:
         factor = map_rule_to_factor(r.name)
         weight = RISK_FACTORS[risk].get(factor, 1)
-        logger.debug(f"قانون={r.name} → فاکتور={factor} → وزن={weight}")
+        logger.debug(f"قانون={r.name} | فاکتور={factor} | وزن={weight} | passed={r.passed}")
         total_weight += weight
         if r.passed:
             passed_weight += weight
-
     return results, passed_weight, total_weight
 
 # ===== تولید سیگنال =====
