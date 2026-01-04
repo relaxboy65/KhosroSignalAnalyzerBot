@@ -250,6 +250,10 @@ def evaluate_rules(
 ) -> Tuple[List[RuleResult], int, int]:
 
     results: List[RuleResult] = []
+    
+    def rule_ema_rejection(prices: List[float], ema_val: float) -> RuleResult:
+    ok = ema_rejection(prices, ema_val)
+    return RuleResult("EMA Rejection", ok, f"EMA={ema_val:.4f}, Last={prices[-1]:.4f}")
 
     # ===== قوانین پایه =====
     results.append(rule_body_strength(open_15m, close_15m, high_15m, low_15m, risk_rules))
@@ -262,8 +266,7 @@ def evaluate_rules(
 
     # ===== الگوها =====
     if prices_series_30m and len(prices_series_30m) >= 10:
-        ok = ema_rejection(prices_series_30m, ema21_30m)
-        results.append(RuleResult("EMA Rejection", ok, f"EMA={ema21_30m:.4f}, Last={prices_series_30m[-1]:.4f}"))
+        results.append(rule_ema_rejection(prices_series_30m, ema21_30m))
         results.append(rule_pullback(prices_series_30m, direction))
     else:
         results.append(RuleResult("EMA Rejection", False, "سری قیمت کافی نیست"))
