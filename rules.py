@@ -262,7 +262,8 @@ def evaluate_rules(
 
     # ===== الگوها =====
     if prices_series_30m and len(prices_series_30m) >= 10:
-        results.append(rule_ema_rejection(prices_series_30m, ema21_30m))
+        ok = ema_rejection(prices_series_30m, ema21_30m)
+        results.append(RuleResult("EMA Rejection", ok, f"EMA={ema21_30m:.4f}, Last={prices_series_30m[-1]:.4f}"))
         results.append(rule_pullback(prices_series_30m, direction))
     else:
         results.append(RuleResult("EMA Rejection", False, "سری قیمت کافی نیست"))
