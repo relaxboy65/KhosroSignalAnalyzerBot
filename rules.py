@@ -187,7 +187,41 @@ def rule_double(prices: List[float]) -> RuleResult:
     ok = dbl is not None
     return RuleResult("Double Top/Bottom", ok, f"Pattern={dbl if dbl else 'None'}")
 
-# ===== اجرای همه قوانین =====
+
+def map_rule_to_factor(rule_name: str) -> str:
+    # قوانین جدید
+    if "حجم" in rule_name:
+        return "Volume"
+    if "کندل" in rule_name:
+        return "Candles"
+    if "EMA" in rule_name:
+        return "EMA"
+    if "تأیید" in rule_name:
+        return "Confirm"
+    if "فشار" in rule_name:
+        return "Pressure"
+
+    # اندیکاتورها
+    if "ADX" in rule_name:
+        return "ADX"
+    if "CCI" in rule_name:
+        return "CCI"
+    if "SAR" in rule_name:
+        return "SAR"
+    if "Stochastic" in rule_name:
+        return "Stoch"
+
+    # الگوها
+    if "Double" in rule_name or "Top" in rule_name or "Bottom" in rule_name:
+        return "Patterns"
+    if "Resistance" in rule_name:
+        return "Patterns"
+
+    # پیش‌فرض
+    return "RiskMgmt"
+
+
+
 def evaluate_rules(
     symbol: str,
     direction: str,
@@ -211,23 +245,19 @@ def evaluate_rules(
     closes_by_tf: Optional[dict] = None,
     prices_series_30m: Optional[List[float]] = None
 ) -> Tuple[List[RuleResult], int, int]:
-    """
-    اجرای همه قوانین و محاسبه وزن پاس‌شده/کل
-    خروجی: لیست نتایج قوانین + وزن پاس‌شده + وزن کل
-    """
 
     results: List[RuleResult] = []
 
-    # قوانین پایه
+    # ===== قوانین پایه =====
     results.append(rule_body_strength(open_15m, close_15m, high_15m, low_15m, risk_rules))
-    results.append(rule_body_strength_5m(open_5m, close_5m, high_5m, low_5m, risk_rules))  # ✅ اصلاح شد
+    results.append(rule_body_strength_5m(open_5m, close_5m, high_5m, low_5m, risk_rules))
     results.append(rule_trend_1h(ema21_1h, ema55_1h, direction, risk_rules))
     results.append(rule_trend_4h(ema21_4h, ema55_4h, ema200_4h, direction, risk_rules))
     results.append(rule_rsi(rsi_30m, direction, risk_rules, risk))
     results.append(rule_macd(macd_hist_30m, direction, risk_rules, risk))
     results.append(rule_entry_break(price_30m, ema21_30m, direction, risk_rules, risk))
 
-    # الگوها
+    # ===== الگوها =====
     if prices_series_30m and len(prices_series_30m) >= 10:
         results.append(rule_ema_rejection(prices_series_30m, ema21_30m))
         results.append(rule_pullback(prices_series_30m, direction))
@@ -235,8 +265,8 @@ def evaluate_rules(
         results.append(RuleResult("EMA Rejection", False, "سری قیمت کافی نیست"))
         results.append(RuleResult("Pullback", False, "سری قیمت کافی نیست"))
 
-    # قوانین اندیکاتوری جدید
-    if candles and isinstance(candles, list) and len(candles) >= 20:
+    # ===== اندیکاتورها =====
+    if candles and len(candles) >= 20:
         results.append(rule_adx(candles, risk_rules, risk))
         results.append(rule_cci(candles, risk_rules, risk))
         results.append(rule_sar(candles, direction, risk_rules, risk))
@@ -247,7 +277,7 @@ def evaluate_rules(
         results.append(RuleResult("SAR", False, "داده کافی نیست"))
         results.append(RuleResult("Stochastic", False, "داده کافی نیست"))
 
-    # قوانین تکمیلی
+    # ===== الگوهای تکمیلی =====
     if prices_series_30m and candles:
         results.append(rule_resistance(prices_series_30m, candles))
         results.append(rule_double(prices_series_30m))
@@ -255,52 +285,54 @@ def evaluate_rules(
         results.append(RuleResult("Resistance Test", False, "داده کافی نیست"))
         results.append(RuleResult("Double Top/Bottom", False, "داده کافی نیست"))
 
+    # ===== حجم =====
     if vol_spike_factor > 1.5:
         results.append(RuleResult("Volume Spike", True, f"Factor={vol_spike_factor:.2f}"))
     else:
         results.append(RuleResult("Volume Spike", False, f"Factor={vol_spike_factor:.2f}"))
 
+    # ===== واگرایی =====
     if divergence_detected:
         results.append(RuleResult("Divergence", True, "واگرایی شناسایی شد"))
     else:
         results.append(RuleResult("Divergence", False, "واگرایی وجود ندارد"))
-    # قوانین تایم‌فریم کوتاه‌تر (1m)
+
+    # ===== قوانین 1m =====
     if closes_by_tf and "1m" in closes_by_tf and len(closes_by_tf["1m"]) >= 20:
         data_1m = closes_by_tf["1m"]
-        avg_vol = sum(c['v'] for c in data_1m[-20:]) / 20
-        if data_1m[-1]['v'] > 1.5 * avg_vol:
-            results.append(RuleResult("حجم لحظه‌ای 1m", True, "اسپایک حجم"))
-        else:
-            results.append(RuleResult("حجم لحظه‌ای 1m", False, "اسپایک حجم وجود ندارد"))
 
-        if all(data_1m[-i]['c'] > data_1m[-i]['o'] for i in range(1,4)):
-            results.append(RuleResult("کندل‌های متوالی 1m", True, "3 کندل صعودی"))
-        else:
-            results.append(RuleResult("کندل‌های متوالی 1m", False, "شرط برقرار نیست"))
+        avg_vol = sum(c['v'] for c in data_1m[-20:]) / 20
+        spike = data_1m[-1]['v'] > 1.5 * avg_vol
+        results.append(RuleResult("حجم لحظه‌ای 1m", spike, "اسپایک حجم" if spike else "اسپایک حجم وجود ندارد"))
+
+        seq = all(data_1m[-i]['c'] > data_1m[-i]['o'] for i in range(1, 4))
+        results.append(RuleResult("کندل‌های متوالی 1m", seq, "3 کندل صعودی" if seq else "شرط برقرار نیست"))
 
         ema8_1m = calculate_ema([c['c'] for c in data_1m], 8)
         ema21_1m = calculate_ema([c['c'] for c in data_1m], 21)
-        if ema8_1m > ema21_1m:
-            results.append(RuleResult("EMA کراس سریع", True, "EMA8 بالای EMA21"))
-        else:
-            results.append(RuleResult("EMA کراس سریع", False, "EMA8 زیر EMA21"))
+        cross = ema8_1m > ema21_1m
+        results.append(RuleResult("EMA کراس سریع", cross, "EMA8 بالای EMA21" if cross else "EMA8 زیر EMA21"))
 
-    # قوانین ترکیبی
-    if rsi_30m > 50 and macd_hist_30m > 0 and any(r.name.startswith("ADX") and r.passed for r in results):
-        results.append(RuleResult("تأیید روند صعودی", True, "RSI>50, MACD+, ADX>20"))
-    else:
-        results.append(RuleResult("تأیید روند صعودی", False, "شرایط کامل برقرار نیست"))
+    # ===== قوانین ترکیبی =====
+    trend_confirm = rsi_30m > 50 and macd_hist_30m > 0 and any(r.name == "ADX" and r.passed for r in results)
+    results.append(RuleResult("تأیید روند صعودی", trend_confirm, "RSI>50, MACD+, ADX>20" if trend_confirm else "شرایط کامل برقرار نیست"))
 
-    if rsi_30m < 40 and macd_hist_30m < 0 and any(r.name.startswith("EMA Rejection") and r.passed for r in results):
-        results.append(RuleResult("فشار فروش", True, "RSI<40, MACD-, EMA Reject"))
-    else:
-        results.append(RuleResult("فشار فروش", False, "شرایط کامل برقرار نیست"))
-  
-    # محاسبه وزن‌ها
-    passed_weight = sum(RISK_FACTORS[risk].get(r.name.split()[0], 1) for r in results if r.passed)
-    total_weight = sum(RISK_FACTORS[risk].get(r.name.split()[0], 1) for r in results)
+    sell_pressure = rsi_30m < 40 and macd_hist_30m < 0 and any(r.name == "EMA Rejection" and r.passed for r in results)
+    results.append(RuleResult("فشار فروش", sell_pressure, "RSI<40, MACD-, EMA Reject" if sell_pressure else "شرایط کامل برقرار نیست"))
+
+    # ===== وزن‌دهی صحیح =====
+    passed_weight = 0
+    total_weight = 0
+
+    for r in results:
+        factor = map_rule_to_factor(r.name)
+        weight = RISK_FACTORS[risk].get(factor, 1)
+        total_weight += weight
+        if r.passed:
+            passed_weight += weight
 
     return results, passed_weight, total_weight
+
 
 
 # ===== تولید سیگنال =====
@@ -381,7 +413,7 @@ async def generate_signal(
     else:
         final_risk = "HIGH"
 
-    status = "SIGNAL" if passed_weight >= total_weight * 0.5 else "NO_SIGNAL"
+    status = "SIGNAL" if passed_weight >= total_weight * 0.6 else "NO_SIGNAL"
 
     # 📊 لاگ کامل
     passed_list = [str(r) for r in rule_results if r.passed]
