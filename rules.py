@@ -168,26 +168,6 @@ def rule_stochastic(candles: List[dict], direction: str, risk_rules: dict, risk_
     return RuleResult("Stochastic", ok, f"K={k:.2f}, D={d:.2f}, Dir={direction} | سطح={risk_level}")
 
 
-# ===== الگوهای کلاسیک =====
-def rule_ema_rejection(prices: List[float], ema_val: float) -> RuleResult:
-    ok = ema_rejection(prices, ema_val)
-    return RuleResult("EMA Rejection", ok, f"EMA={ema_val:.4f}, Last={prices[-1]:.4f}")
-
-def rule_resistance(prices: List[float], candles: List[dict]) -> RuleResult:
-    resistance_level = max([c['h'] for c in candles[-10:]]) if len(candles) >= 10 else None
-    ok = resistance_level is not None and resistance_test(prices, resistance_level)
-    return RuleResult("Resistance Test", ok, f"Res={('%.4f' % resistance_level) if resistance_level else 'None'}, Last={prices[-1]:.4f}")
-
-def rule_pullback(prices: List[float], direction="LONG") -> RuleResult:
-    ok = pullback(prices, trend_direction=direction)
-    return RuleResult("Pullback", ok, f"Last={prices[-1]:.4f}, Dir={direction}")
-
-def rule_double(prices: List[float]) -> RuleResult:
-    dbl = double_top_bottom(prices)
-    ok = dbl is not None
-    return RuleResult("Double Top/Bottom", ok, f"Pattern={dbl if dbl else 'None'}")
-
-
 def map_rule_to_factor(rule_name: str) -> str:
     name = rule_name.strip()
 
@@ -245,6 +225,7 @@ def map_rule_to_factor(rule_name: str) -> str:
 
     # ===== پیش‌فرض =====
     return "RiskMgmt"
+
 
 
 def evaluate_rules(
@@ -350,11 +331,13 @@ def evaluate_rules(
     for r in results:
         factor = map_rule_to_factor(r.name)
         weight = RISK_FACTORS[risk].get(factor, 1)
+        logger.debug(f"قانون={r.name} → فاکتور={factor} → وزن={weight}")
         total_weight += weight
         if r.passed:
             passed_weight += weight
 
     return results, passed_weight, total_weight
+
 # ===== تولید سیگنال =====
 async def generate_signal(
     symbol: str,
