@@ -174,55 +174,60 @@ def update_csv_rows(date_str):
         print(f"✅ وضعیت سیگنال‌های {date_str} آپدیت شد: {path}")
         print("="*80)
 
-    # ────────────────────────────────────────────────
-    # پاکسازی فایل‌های قدیمی‌تر از ۱۰ روز - همیشه اجرا می‌شود
+       # ────────────────────────────────────────────────
+    # پاکسازی فایل‌های قدیمی - با همان روشی که فایل ساخته می‌شود
+    print("\n" + "═"*80)
+    print("🗑️ پاکسازی فایل‌های قدیمی‌تر از ۱۰ روز (با روش daily_csv_path)")
+    
     now_tehran = tehran_now()
     threshold_date = now_tehran - timedelta(days=10)
     threshold_str = threshold_date.strftime("%Y-%m-%d")
-
-    print(f"\n🗑️  پاکسازی فایل‌های قدیمی‌تر از {threshold_str} ...")
-
-    deleted_count = 0
-    kept_count = 0
-    invalid_count = 0
-
+    
+    print(f"تاریخ آستانه حذف: {threshold_str} (فایل‌های قبل از این تاریخ حذف می‌شوند)")
+    
     if not os.path.isdir(SIGNALS_DIR):
-        print(f"   پوشه {SIGNALS_DIR} وجود ندارد → هیچ فایلی برای بررسی نیست")
-    else:
-        for filename in os.listdir(SIGNALS_DIR):
-            if not filename.lower().endswith(".csv"):
-                continue
-
-            file_path = os.path.join(SIGNALS_DIR, filename)
-
-            try:
-                # استخراج تاریخ از نام فایل (قبل از .csv)
-                date_part = filename[:-4].strip()
-                file_date = datetime.strptime(date_part, "%Y-%m-%d").date()
-
-                if file_date < threshold_date.date():
-                    os.remove(file_path)
-                    print(f"   حذف شد → {filename}  ({file_date})")
+        print(f"پوشه {SIGNALS_DIR} وجود ندارد → هیچ فایلی برای حذف نیست")
+        return
+    
+    deleted_count = 0
+    kept_count   = 0
+    invalid_count = 0
+    
+    for filename in os.listdir(SIGNALS_DIR):
+        if not filename.lower().endswith(".csv"):
+            continue
+            
+        full_path = os.path.join(SIGNALS_DIR, filename)
+        
+        # دقیقاً همان فرمت نام فایل را چک می‌کنیم
+        try:
+            date_part = filename[:-4]           # حذف .csv
+            file_date = datetime.strptime(date_part, "%Y-%m-%d").date()
+            
+            if file_date < threshold_date.date():
+                try:
+                    os.remove(full_path)
+                    print(f"   حذف شد → {filename}   ({file_date})")
                     deleted_count += 1
-                else:
-                    print(f"   نگه داشته شد → {filename}  ({file_date})")
-                    kept_count += 1
-
-            except ValueError:
-                print(f"   رد شد (نام فایل نامعتبر) → {filename}")
-                invalid_count += 1
-            except PermissionError:
-                print(f"   خطای مجوز حذف → {filename}")
-                invalid_count += 1
-            except Exception as e:
-                print(f"   خطا در پردازش {filename}: {e}")
-                invalid_count += 1
-
-    print(f"\nنتیجه پاکسازی:")
-    print(f"   حذف شده           : {deleted_count} فایل")
-    print(f"   نگه داشته شده     : {kept_count} فایل")
-    print(f"   نامعتبر / خطادار  : {invalid_count} فایل")
-    print("="*80)
+                except PermissionError:
+                    print(f"   خطای مجوز - نتوانست حذف شود → {filename}")
+                    invalid_count += 1
+                except Exception as e:
+                    print(f"   خطا هنگام حذف {filename}: {e}")
+                    invalid_count += 1
+            else:
+                print(f"   نگه داشته شد → {filename}   ({file_date})")
+                kept_count += 1
+                
+        except ValueError:
+            print(f"   نام فایل نامنطبق با فرمت YYYY-MM-DD.csv → رد شد: {filename}")
+            invalid_count += 1
+    
+    print("\nنتیجه نهایی پاکسازی:")
+    print(f"   حذف موفق       : {deleted_count} فایل")
+    print(f"   نگه داشته شده  : {kept_count} فایل")
+    print(f"   مشکل‌دار / نامعتبر : {invalid_count} فایل")
+    print("═"*80)
 
 
 if __name__ == "__main__":
