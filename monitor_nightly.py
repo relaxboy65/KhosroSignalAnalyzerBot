@@ -68,125 +68,162 @@ def compute_pnl_usd(direction, entry_price, exit_price, position_size_usd, fee_r
 
 def update_csv_rows(date_str):
     path = daily_csv_path(date_str)
-    if not os.path.isfile(path):
+    file_exists = os.path.isfile(path)
+
+    if not file_exists:
         print(f"⚠️ فایل روزانه یافت نشد: {path}")
-        return
+    else:
+        rows = []
+        with open(path, mode="r", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                rows.append(row)
 
-    rows = []
-    with open(path, mode="r", newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            rows.append(row)
+        tz = ZoneInfo("Asia/Tehran")
+        day_end = datetime.fromisoformat(f"{date_str} 23:59:00").replace(tzinfo=tz)
 
-    tz = ZoneInfo("Asia/Tehran")
-    day_end = datetime.fromisoformat(f"{date_str} 23:59:00").replace(tzinfo=tz)
+        print("="*80)
+        print(f"📊 شروع مانیتور شبانه برای تاریخ {date_str}")
+        print("="*80)
 
-    print("="*80)
-    print(f"📊 شروع مانیتور شبانه برای تاریخ {date_str}")
-    print("="*80)
+        updated_rows = []
+        for row in rows:
+            if row["status"] != "OPEN":
+                updated_rows.append(row)
+                continue
 
-    updated_rows = []
-    for row in rows:
-        if row["status"] != "OPEN":
+            symbol = row["symbol"]
+            direction = row["direction"]
+            entry_price = float(row["entry_price"])
+            stop_loss = float(row["stop_loss"])
+            take_profit = float(row["take_profit"])
+            issued_at = parse_tehran_time(row["issued_at_tehran"])
+            position_size_usd = float(row.get("position_size_usd", "10"))
+
+            start_at_unix = int(issued_at.astimezone(ZoneInfo("UTC")).timestamp())
+            end_at_unix = int(day_end.astimezone(ZoneInfo("UTC")).timestamp())
+
+            candles = fetch_kucoin_1m(symbol, start_at_unix, end_at_unix)
+
+            print(f"\n🔎 بررسی سیگنال {symbol} ({direction})")
+            print(f"زمان صدور: {issued_at} | ورود: {entry_price:.6f} | SL: {stop_loss:.6f} | TP: {take_profit:.6f}")
+            print(f"تعداد کندل‌های دریافت‌شده: {len(candles)}")
+
+            if candles:
+                first_dt = datetime.fromtimestamp(candles[0]['t'], tz)
+                last_dt = datetime.fromtimestamp(candles[-1]['t'], tz)
+                print(f"اولین کندل: {first_dt} | آخرین کندل: {last_dt}")
+            else:
+                print(f"⚠️ هیچ کندلی برای {symbol} دریافت نشد")
+
+            hit_status, hit_time_tehran, hit_price, exit_price = None, "", "", None
+            for c in candles:
+                candle_dt_tehran = datetime.fromtimestamp(c['t'], tz)
+                high, low = c['h'], c['l']
+                tp_hit, sl_hit = high >= take_profit, low <= stop_loss
+
+                if sl_hit and tp_hit:
+                    hit_status = "STOP_HIT"
+                    hit_price = f"{stop_loss:.8f}"
+                    hit_time_tehran = candle_dt_tehran.strftime("%Y-%m-%d %H:%M:%S")
+                    exit_price = stop_loss
+                    print(f"⚠️ همزمان TP و SL → انتخاب STOP_HIT در {hit_time_tehran}")
+                    break
+                elif sl_hit:
+                    hit_status = "STOP_HIT"
+                    hit_price = f"{stop_loss:.8f}"
+                    hit_time_tehran = candle_dt_tehran.strftime("%Y-%m-%d %H:%M:%S")
+                    exit_price = stop_loss
+                    print(f"❌ SL فعال شد در {hit_time_tehran} قیمت {hit_price}")
+                    break
+                elif tp_hit:
+                    hit_status = "TP_HIT"
+                    hit_price = f"{take_profit:.8f}"
+                    hit_time_tehran = candle_dt_tehran.strftime("%Y-%m-%d %H:%M:%S")
+                    exit_price = take_profit
+                    print(f"✅ TP فعال شد در {hit_time_tehran} قیمت {hit_price}")
+                    break
+
+            if hit_status is None:
+                last_close = candles[-1]['c'] if candles else entry_price
+                hit_status = "CLOSED_MANUAL"
+                hit_price = f"{last_close:.8f}"
+                hit_time_tehran = day_end.strftime("%Y-%m-%d %H:%M:%S")
+                exit_price = last_close
+                print(f"📭 سیگنال دستی بسته شد در پایان روز {hit_time_tehran} قیمت {hit_price}")
+
+            final_pnl_usd, return_pct, broker_fee = compute_pnl_usd(direction, entry_price, exit_price, position_size_usd)
+            print(f"📈 نتیجه: {hit_status} | سود/زیان نهایی: {final_pnl_usd:.4f} USD | بازده: {return_pct:.2f}% | کارمزد: {broker_fee:.4f} USD")
+
+            row.update({
+                "status": hit_status,
+                "hit_price": hit_price,
+                "hit_time_tehran": hit_time_tehran,
+                "broker_fee": f"{broker_fee:.6f}",
+                "final_pnl_usd": f"{final_pnl_usd:.6f}",
+                "return_pct": f"{return_pct:.4f}"
+            })
             updated_rows.append(row)
-            continue
 
-        symbol = row["symbol"]
-        direction = row["direction"]
-        entry_price = float(row["entry_price"])
-        stop_loss = float(row["stop_loss"])
-        take_profit = float(row["take_profit"])
-        issued_at = parse_tehran_time(row["issued_at_tehran"])
-        position_size_usd = float(row.get("position_size_usd", "10"))
+        with open(path, mode="w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=CSV_HEADERS)
+            writer.writeheader()
+            writer.writerows(updated_rows)
 
-        start_at_unix = int(issued_at.astimezone(ZoneInfo("UTC")).timestamp())
-        end_at_unix = int(day_end.astimezone(ZoneInfo("UTC")).timestamp())
+        print("="*80)
+        print(f"✅ وضعیت سیگنال‌های {date_str} آپدیت شد: {path}")
+        print("="*80)
 
-        candles = fetch_kucoin_1m(symbol, start_at_unix, end_at_unix)
-
-        print(f"\n🔎 بررسی سیگنال {symbol} ({direction})")
-        print(f"زمان صدور: {issued_at} | ورود: {entry_price:.6f} | SL: {stop_loss:.6f} | TP: {take_profit:.6f}")
-        print(f"تعداد کندل‌های دریافت‌شده: {len(candles)}")
-
-        if candles:
-            first_dt = datetime.fromtimestamp(candles[0]['t'], tz)
-            last_dt = datetime.fromtimestamp(candles[-1]['t'], tz)
-            print(f"اولین کندل: {first_dt} | آخرین کندل: {last_dt}")
-        else:
-            print(f"⚠️ هیچ کندلی برای {symbol} دریافت نشد")
-
-        hit_status, hit_time_tehran, hit_price, exit_price = None, "", "", None
-        for c in candles:
-            candle_dt_tehran = datetime.fromtimestamp(c['t'], tz)
-            high, low = c['h'], c['l']
-            tp_hit, sl_hit = high >= take_profit, low <= stop_loss
-
-            if sl_hit and tp_hit:
-                hit_status = "STOP_HIT"
-                hit_price = f"{stop_loss:.8f}"
-                hit_time_tehran = candle_dt_tehran.strftime("%Y-%m-%d %H:%M:%S")
-                exit_price = stop_loss
-                print(f"⚠️ همزمان TP و SL → انتخاب STOP_HIT در {hit_time_tehran}")
-                break
-            elif sl_hit:
-                hit_status = "STOP_HIT"
-                hit_price = f"{stop_loss:.8f}"
-                hit_time_tehran = candle_dt_tehran.strftime("%Y-%m-%d %H:%M:%S")
-                exit_price = stop_loss
-                print(f"❌ SL فعال شد در {hit_time_tehran} قیمت {hit_price}")
-                break
-            elif tp_hit:
-                hit_status = "TP_HIT"
-                hit_price = f"{take_profit:.8f}"
-                hit_time_tehran = candle_dt_tehran.strftime("%Y-%m-%d %H:%M:%S")
-                exit_price = take_profit
-                print(f"✅ TP فعال شد در {hit_time_tehran} قیمت {hit_price}")
-                break
-
-        if hit_status is None:
-            last_close = candles[-1]['c'] if candles else entry_price
-            hit_status = "CLOSED_MANUAL"
-            hit_price = f"{last_close:.8f}"
-            hit_time_tehran = day_end.strftime("%Y-%m-%d %H:%M:%S")
-            exit_price = last_close
-            print(f"📭 سیگنال دستی بسته شد در پایان روز {hit_time_tehran} قیمت {hit_price}")
-
-        final_pnl_usd, return_pct, broker_fee = compute_pnl_usd(direction, entry_price, exit_price, position_size_usd)
-        print(f"📈 نتیجه: {hit_status} | سود/زیان نهایی: {final_pnl_usd:.4f} USD | بازده: {return_pct:.2f}% | کارمزد: {broker_fee:.4f} USD")
-
-        row.update({
-            "status": hit_status,
-            "hit_price": hit_price,
-            "hit_time_tehran": hit_time_tehran,
-            "broker_fee": f"{broker_fee:.6f}",
-            "final_pnl_usd": f"{final_pnl_usd:.6f}",
-            "return_pct": f"{return_pct:.4f}"
-        })
-        updated_rows.append(row)
-
-    with open(path, mode="w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_HEADERS)
-        writer.writeheader()
-        writer.writerows(updated_rows)
-
-    print("="*80)
-    print(f"✅ وضعیت سیگنال‌های {date_str} آپدیت شد: {path}")
-    print("="*80)
-
-    # حذف فایل‌های قدیمی‌تر از 10 روز
+    # ────────────────────────────────────────────────
+    # پاکسازی فایل‌های قدیمی‌تر از ۱۰ روز - همیشه اجرا می‌شود
     now_tehran = tehran_now()
     threshold_date = now_tehran - timedelta(days=10)
-    for filename in os.listdir(SIGNALS_DIR):
-        if filename.endswith(".csv"):
+    threshold_str = threshold_date.strftime("%Y-%m-%d")
+
+    print(f"\n🗑️  پاکسازی فایل‌های قدیمی‌تر از {threshold_str} ...")
+
+    deleted_count = 0
+    kept_count = 0
+    invalid_count = 0
+
+    if not os.path.isdir(SIGNALS_DIR):
+        print(f"   پوشه {SIGNALS_DIR} وجود ندارد → هیچ فایلی برای بررسی نیست")
+    else:
+        for filename in os.listdir(SIGNALS_DIR):
+            if not filename.lower().endswith(".csv"):
+                continue
+
+            file_path = os.path.join(SIGNALS_DIR, filename)
+
             try:
-                file_date_str = filename[:-4]  # YYYY-MM-DD
-                file_date = datetime.strptime(file_date_str, "%Y-%m-%d").date()
+                # استخراج تاریخ از نام فایل (قبل از .csv)
+                date_part = filename[:-4].strip()
+                file_date = datetime.strptime(date_part, "%Y-%m-%d").date()
+
                 if file_date < threshold_date.date():
-                    old_path = os.path.join(SIGNALS_DIR, filename)
-                    os.remove(old_path)
-                    print(f"🗑️ فایل قدیمی حذف شد: {old_path}")
+                    os.remove(file_path)
+                    print(f"   حذف شد → {filename}  ({file_date})")
+                    deleted_count += 1
+                else:
+                    print(f"   نگه داشته شد → {filename}  ({file_date})")
+                    kept_count += 1
+
             except ValueError:
-                print(f"⚠️ نام فایل نامعتبر: {filename} — رد شد")
+                print(f"   رد شد (نام فایل نامعتبر) → {filename}")
+                invalid_count += 1
+            except PermissionError:
+                print(f"   خطای مجوز حذف → {filename}")
+                invalid_count += 1
+            except Exception as e:
+                print(f"   خطا در پردازش {filename}: {e}")
+                invalid_count += 1
+
+    print(f"\nنتیجه پاکسازی:")
+    print(f"   حذف شده           : {deleted_count} فایل")
+    print(f"   نگه داشته شده     : {kept_count} فایل")
+    print(f"   نامعتبر / خطادار  : {invalid_count} فایل")
+    print("="*80)
+
 
 if __name__ == "__main__":
     now_tehran = tehran_now()
