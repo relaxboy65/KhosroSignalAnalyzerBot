@@ -65,6 +65,7 @@ def compute_pnl_usd(direction, entry_price, exit_price, position_size_usd, fee_r
     gross_pnl = position_size_usd * ret_pct
     net_pnl = gross_pnl - fee_total
     return net_pnl, ret_pct * 100.0, fee_total
+
 def update_csv_rows(date_str):
     path = daily_csv_path(date_str)
     if not os.path.isfile(path):
@@ -172,15 +173,22 @@ def update_csv_rows(date_str):
     print(f"✅ وضعیت سیگنال‌های {date_str} آپدیت شد: {path}")
     print("="*80)
 
+    # حذف فایل‌های قدیمی‌تر از 10 روز
+    now_tehran = tehran_now()
+    threshold_date = now_tehran - timedelta(days=10)
+    for filename in os.listdir(SIGNALS_DIR):
+        if filename.endswith(".csv"):
+            try:
+                file_date_str = filename[:-4]  # YYYY-MM-DD
+                file_date = datetime.strptime(file_date_str, "%Y-%m-%d").date()
+                if file_date < threshold_date.date():
+                    old_path = os.path.join(SIGNALS_DIR, filename)
+                    os.remove(old_path)
+                    print(f"🗑️ فایل قدیمی حذف شد: {old_path}")
+            except ValueError:
+                print(f"⚠️ نام فایل نامعتبر: {filename} — رد شد")
 
-#if __name__ == "__main__":
-#    now_tehran = tehran_now()
-    # برای تست روز جاری را بررسی کن
-#    target_date = now_tehran.strftime("%Y-%m-%d")
-#    update_csv_rows(target_date)
-    
 if __name__ == "__main__":
     now_tehran = tehran_now()
     target_date = (now_tehran - timedelta(days=1)).strftime("%Y-%m-%d")
     update_csv_rows(target_date)
-
