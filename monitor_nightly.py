@@ -4,8 +4,11 @@ import os
 import time
 import requests
 import subprocess  # برای git commit/push
+import aiohttp
+import logging
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID  # فرض بر این است که config.py این‌ها را دارد
 
 KUCOIN_URL = "https://api.kucoin.com/api/v1/market/candles"
 
@@ -19,6 +22,8 @@ CSV_HEADERS = [
 
 BROKER_FEE_RATE = 0.001  # 0.1% برای ورود و خروج
 SLIPPAGE_PCT = 0.0005    # 0.05% لغزش
+
+logger = logging.getLogger(__name__)
 
 def tehran_now():
     return datetime.now(ZoneInfo("Asia/Tehran"))
@@ -66,6 +71,76 @@ def compute_pnl_usd(direction, entry_price, exit_price, position_size_usd, fee_r
     gross_pnl = position_size_usd * ret_pct
     net_pnl = gross_pnl - fee_total
     return net_pnl, ret_pct * 100.0, fee_total
+
+# تابع جدید برای تولید گزارش روزانه
+def generate_daily_report(date_str):
+    path = daily_csv_path(date_str)
+    if not os.path.isfile(path):
+        return f"⚠️ فایل CSV برای {date_str} یافت نشد."
+
+    with open(path, mode="r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        signals = list(reader)
+
+    total_signals = len(signals)
+    if total_signals == 0:
+        return f"📊 هیچ سیگنالی برای {date_str} تولید نشده."
+
+    # آمار
+    long_count = sum(1 for s in signals if s.get("direction") == "LONG")
+    short_count = sum(1 for s in signals if s.get("direction") == "SHORT")
+    low_risk = sum(1 for s in signals if s.get("risk_level") == "LOW")
+    medium_risk = sum(1 for s in signals if s.get("risk_level") == "MEDIUM")
+    high_risk = sum(1 for s in signals if s.get("risk_level") == "HIGH")
+    open_count = sum(1 for s in signals if s.get("status") == "OPEN")
+    tp_hit_count = sum(1 for s in signals if s.get("status") == "TP_HIT")
+    stop_hit_count = sum(1 for s in signals if s.get("status") == "STOP_HIT")
+    manual_closed_count = sum(1 for s in signals if s.get("status") == "CLOSED_MANUAL")
+
+    # PNL فقط برای سیگنال‌های بسته‌شده
+    closed_signals = [s for s in signals if s.get("final_pnl_usd") and s.get("status") != "OPEN"]
+    total_pnl = sum(float(s["final_pnl_usd"]) for s in closed_signals) if closed_signals else 0.0
+    avg_pnl = total_pnl / len(closed_signals) if closed_signals else 0.0
+
+    report = f"📊 گزارش روزانه سیگنال‌ها برای {date_str}\n"
+    report += f"تعداد کل سیگنال‌ها: {total_signals}\n"
+    report += f" - LONG: {long_count}\n"
+    report += f" - SHORT: {short_count}\n"
+    report += f"سطوح ریسک:\n"
+    report += f" - LOW: {low_risk}\n"
+    report += f" - MEDIUM: {medium_risk}\n"
+    report += f" - HIGH: {high_risk}\n"
+    report += f"وضعیت‌ها:\n"
+    report += f" - OPEN: {open_count}\n"
+    report += f" - TP_HIT: {tp_hit_count}\n"
+    report += f" - STOP_HIT: {stop_hit_count}\n"
+    report += f" - CLOSED_MANUAL: {manual_closed_count}\n"
+    report += f"سود/زیان کلی (برای سیگنال‌های بسته‌شده):\n"
+    report += f" - تعداد بسته‌شده: {len(closed_signals)}\n"
+    report += f" - مجموع PNL (USD): {total_pnl:.2f}\n"
+    report += f" - میانگین PNL: {avg_pnl:.2f}\n"
+
+    return report
+
+# تابع ارسال به تلگرام (کپی از rules.py برای استقلال)
+async def send_to_telegram(text: str):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        logger.warning("⚠️ تنظیمات تلگرام ناقص است")
+        return
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"}
+
+    logger.info("📤 تلاش برای ارسال پیام تلگرام...")
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.post(url, json=payload, timeout=20) as resp:
+                body = await resp.text()
+                if resp.status == 200:
+                    logger.info("✅ پیام به تلگرام ارسال شد")
+                else:
+                    logger.warning(f"⚠️ خطا در ارسال تلگرام: {resp.status} | پاسخ: {body}")
+        except Exception as e:
+            logger.error(f"❌ خطا در ارسال به تلگرام: {e}")
 
 def update_csv_rows(date_str):
     path = daily_csv_path(date_str)
@@ -224,6 +299,13 @@ def update_csv_rows(date_str):
     print(f"   نگه داشته شده: {kept_count} فایل")
     print(f"   نامعتبر / خطادار: {invalid_count} فایل")
     print("="*80)
+
+    # ────────────────────────────────────────────────
+    # تولید گزارش روزانه و ارسال به تلگرام
+    report = generate_daily_report(date_str)
+    print(report)  # نمایش در کنسول
+    import asyncio  # برای اجرای async
+    asyncio.run(send_to_telegram(report))  # ارسال به تلگرام
 
     # ────────────────────────────────────────────────
     # خودکار commit و push تغییرات به GitHub (برای Actions)
