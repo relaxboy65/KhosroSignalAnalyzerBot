@@ -72,7 +72,7 @@ def compute_pnl_usd(direction, entry_price, exit_price, position_size_usd, fee_r
     net_pnl = gross_pnl - fee_total
     return net_pnl, ret_pct * 100.0, fee_total
 
-# تابع جدید برای تولید گزارش روزانه
+# تابع تولید گزارش روزانه - فقط TP_HIT و STOP_HIT محاسبه می‌شوند
 def generate_daily_report(date_str):
     path = daily_csv_path(date_str)
     if not os.path.isfile(path):
@@ -80,55 +80,72 @@ def generate_daily_report(date_str):
 
     with open(path, mode="r", newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        signals = list(reader)
+        all_signals = list(reader)
 
-    total_signals = len(signals)
-    if total_signals == 0:
-        return f"📊 هیچ سیگنالی برای {date_str} تولید نشده."
+    # فقط سیگنال‌های hit شده (TP یا SL فعال شده)
+    filtered_signals = [
+        s for s in all_signals
+        if s.get("status") in ["TP_HIT", "STOP_HIT"]
+    ]
 
-    # آمار
-    long_count = sum(1 for s in signals if s.get("direction") == "LONG")
-    short_count = sum(1 for s in signals if s.get("direction") == "SHORT")
-    low_risk = sum(1 for s in signals if s.get("risk_level") == "LOW")
-    medium_risk = sum(1 for s in signals if s.get("risk_level") == "MEDIUM")
-    high_risk = sum(1 for s in signals if s.get("risk_level") == "HIGH")
-    open_count = sum(1 for s in signals if s.get("status") == "OPEN")
-    tp_hit_count = sum(1 for s in signals if s.get("status") == "TP_HIT")
-    stop_hit_count = sum(1 for s in signals if s.get("status") == "STOP_HIT")
-    manual_closed_count = sum(1 for s in signals if s.get("status") == "CLOSED_MANUAL")
+    hit_count = len(filtered_signals)
+    if hit_count == 0:
+        return f"📊 برای تاریخ {date_str} هیچ سیگنال hit شده (TP_HIT یا STOP_HIT) وجود ندارد.\n" \
+               f"(OPEN و CLOSED_MANUAL در گزارش روزانه نادیده گرفته می‌شوند)"
 
-    # PNL فقط برای سیگنال‌های بسته‌شده
-    closed_signals = [s for s in signals if s.get("final_pnl_usd") and s.get("status") != "OPEN"]
-    total_pnl = sum(float(s["final_pnl_usd"]) for s in closed_signals) if closed_signals else 0.0
-    avg_pnl = total_pnl / len(closed_signals) if closed_signals else 0.0
+    # آمار فقط روی hit شده‌ها
+    long_count = sum(1 for s in filtered_signals if s.get("direction") == "LONG")
+    short_count = sum(1 for s in filtered_signals if s.get("direction") == "SHORT")
+    low_risk = sum(1 for s in filtered_signals if s.get("risk_level") == "LOW")
+    medium_risk = sum(1 for s in filtered_signals if s.get("risk_level") == "MEDIUM")
+    high_risk = sum(1 for s in filtered_signals if s.get("risk_level") == "HIGH")
+    tp_hit_count = sum(1 for s in filtered_signals if s.get("status") == "TP_HIT")
+    stop_hit_count = sum(1 for s in filtered_signals if s.get("status") == "STOP_HIT")
 
-    report = f"📊 گزارش روزانه سیگنال‌ها برای {date_str}\n"
-    report += f"تعداد کل سیگنال‌ها: {total_signals}\n"
-    report += f" - LONG: {long_count}\n"
-    report += f" - SHORT: {short_count}\n"
-    report += f"سطوح ریسک:\n"
-    report += f" - LOW: {low_risk}\n"
-    report += f" - MEDIUM: {medium_risk}\n"
-    report += f" - HIGH: {high_risk}\n"
-    report += f"وضعیت‌ها:\n"
-    report += f" - OPEN: {open_count}\n"
-    report += f" - TP_HIT: {tp_hit_count}\n"
-    report += f" - STOP_HIT: {stop_hit_count}\n"
-    report += f" - CLOSED_MANUAL: {manual_closed_count}\n"
-    report += f"سود/زیان کلی (برای سیگنال‌های بسته‌شده):\n"
-    report += f" - تعداد بسته‌شده: {len(closed_signals)}\n"
-    report += f" - مجموع PNL (USD): {total_pnl:.2f}\n"
-    report += f" - میانگین PNL: {avg_pnl:.2f}\n"
+    # PNL فقط برای hit شده‌ها
+    total_pnl = sum(float(s["final_pnl_usd"]) for s in filtered_signals)
+    avg_pnl = total_pnl / hit_count
+    success_rate = (tp_hit_count / hit_count * 100) if hit_count > 0 else 0.0
+
+    # بهترین و بدترین
+    if filtered_signals:
+        best_pnl = max(float(s["final_pnl_usd"]) for s in filtered_signals)
+        worst_pnl = min(float(s["final_pnl_usd"]) for s in filtered_signals)
+        best_symbol = next((s["symbol"] for s in filtered_signals if float(s["final_pnl_usd"]) == best_pnl), "N/A")
+        worst_symbol = next((s["symbol"] for s in filtered_signals if float(s["final_pnl_usd"]) == worst_pnl), "N/A")
+    else:
+        best_pnl = worst_pnl = 0.0
+        best_symbol = worst_symbol = "N/A"
+
+    # گزارش شکیل با Markdown
+    report = f"📅 **گزارش روزانه سیگنال‌های Hit شده - تاریخ: {date_str}**\n\n"
+    report += f"🔢 **تعداد سیگنال‌های فعال‌شده (TP یا SL)**: {hit_count}\n"
+    report += f"   - 🟢 LONG: {long_count} ({long_count/hit_count*100:.1f}%)\n"
+    report += f"   - 🔴 SHORT: {short_count} ({short_count/hit_count*100:.1f}%)\n\n"
+    report += f"📊 **سطوح ریسک** (فقط در سیگنال‌های hit شده):\n"
+    report += f"   - 🟢 LOW: {low_risk} ({low_risk/hit_count*100:.1f}%)\n"
+    report += f"   - 🟡 MEDIUM: {medium_risk} ({medium_risk/hit_count*100:.1f}%)\n"
+    report += f"   - 🔴 HIGH: {high_risk} ({high_risk/hit_count*100:.1f}%)\n\n"
+    report += f"🛡️ **وضعیت Hit**:\n"
+    report += f"   - ✅ TP_HIT: {tp_hit_count} ({tp_hit_count/hit_count*100:.1f}%)\n"
+    report += f"   - ❌ STOP_HIT: {stop_hit_count} ({stop_hit_count/hit_count*100:.1f}%)\n\n"
+    report += f"💹 **عملکرد مالی (فقط TP_HIT و STOP_HIT)**:\n"
+    report += f"   - نرخ موفقیت (TP): {success_rate:.1f}%\n"
+    report += f"   - مجموع PNL (USD): {total_pnl:.2f}\n"
+    report += f"   - میانگین PNL هر سیگنال hit شده: {avg_pnl:.2f}\n"
+    report += f"   - بهترین نتیجه: {best_pnl:.2f} USD (نماد: {best_symbol})\n"
+    report += f"   - بدترین نتیجه: {worst_pnl:.2f} USD (نماد: {worst_symbol})\n\n"
+    report += f"ℹ️ **نکته مهم**: فقط سیگنال‌هایی که SL یا TP آن‌ها فعال شده در این گزارش محاسبه شده‌اند. سیگنال‌های OPEN و CLOSED_MANUAL کاملاً نادیده گرفته شده‌اند."
 
     return report
 
-# تابع ارسال به تلگرام (کپی از rules.py برای استقلال)
+# تابع ارسال به تلگرام
 async def send_to_telegram(text: str):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         logger.warning("⚠️ تنظیمات تلگرام ناقص است")
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"}
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "Markdown"}
 
     logger.info("📤 تلاش برای ارسال پیام تلگرام...")
     async with aiohttp.ClientSession() as session:
@@ -251,7 +268,7 @@ def update_csv_rows(date_str):
         print("="*80)
 
     # ────────────────────────────────────────────────
-    # پاکسازی فایل‌های قدیمی‌تر از ۱۰ روز - با روش daily_csv_path
+    # پاکسازی فایل‌های قدیمی‌تر از ۱۰ روز
     now_tehran = tehran_now()
     threshold_date = now_tehran - timedelta(days=10)
     threshold_str = threshold_date.strftime("%Y-%m-%d")
@@ -304,7 +321,7 @@ def update_csv_rows(date_str):
     # تولید گزارش روزانه و ارسال به تلگرام
     report = generate_daily_report(date_str)
     print(report)  # نمایش در کنسول
-    import asyncio  # برای اجرای async
+    import asyncio
     asyncio.run(send_to_telegram(report))  # ارسال به تلگرام
 
     # ────────────────────────────────────────────────
@@ -312,22 +329,15 @@ def update_csv_rows(date_str):
     if deleted_count > 0:
         print("\n📤 تلاش برای commit و push حذف‌ها به GitHub...")
         try:
-            # تنظیم user برای git
             subprocess.run(["git", "config", "--global", "user.name", "GitHub Action"], check=True)
             subprocess.run(["git", "config", "--global", "user.email", "action@github.com"], check=True)
-
-            # stage تغییرات (حذف‌ها)
             subprocess.run(["git", "add", "-u", SIGNALS_DIR], check=True)
-
-            # commit اگر تغییری بود
             commit_output = subprocess.run(["git", "commit", "-m", f"حذف خودکار {deleted_count} فایل قدیمی signals"], capture_output=True, text=True)
             if "nothing to commit" in commit_output.stdout or commit_output.returncode != 0:
                 print("⚠️ هیچ تغییری برای commit نبود یا خطا رخ داد")
             else:
-                # push به origin (در Actions، GITHUB_TOKEN مدیریت می‌کند)
                 subprocess.run(["git", "push", "origin", "HEAD"], check=True)
                 print("✅ تغییرات با موفقیت push شد به GitHub")
-
         except subprocess.CalledProcessError as e:
             print(f"❌ خطا در git command: {e.stderr}")
         except Exception as e:
