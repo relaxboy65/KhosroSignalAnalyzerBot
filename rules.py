@@ -356,13 +356,25 @@ def evaluate_rules(
     except Exception:
         pass
 
-    for r in results:
-        factor = map_rule_to_factor(r.name)
-        weight = RISK_FACTORS[risk].get(factor, 1)
-        logger.debug(f"قانون={r.name} | فاکتور={factor} | وزن={weight} | passed={r.passed}")
-        total_weight += weight
-        if r.passed:
-            passed_weight += weight
+for r in results:
+
+    # ❗ قوانینی که اصلاً evaluate نشده‌اند وارد محاسبه نشوند
+    # معیار: داده کافی نیست
+    if "داده کافی نیست" in str(r.detail):
+        continue
+
+    factor = map_rule_to_factor(r.name)
+    weight = RISK_FACTORS[risk].get(factor, 1)
+
+    logger.debug(
+        f"قانون={r.name} | فاکتور={factor} | وزن={weight} | passed={r.passed}"
+    )
+
+    total_weight += weight
+
+    if r.passed:
+        passed_weight += weight
+
     return results, passed_weight, total_weight
 
 # ===== تولید سیگنال =====
