@@ -2,7 +2,7 @@ name: Nightly Signal Monitor & Cleanup
 
 on:
   schedule:
-    - cron: "30 22 * * *"   # حدود ۲ شب تهران
+    - cron: "30 22 * * *" # حدود ۲ شب تهران
   workflow_dispatch:
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
           fetch-depth: 0      # ← مهم برای دیدن تاریخچه و حذف درست
 
       - name: Set up Python
-        uses: actions/setup-python@v5   # بهتر است از v5 استفاده شود
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -30,18 +30,19 @@ jobs:
           fi
 
       - name: Run nightly monitor & cleanup
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python monitor_nightly.py
 
       - name: Commit changes (updates + deletions)
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: |
-            Nightly monitor: 
+            Nightly monitor:
             - Updated CSV statuses
             - Removed old signal files older than 10 days
           file_pattern: signals/*.csv
-          # این گزینه باعث می‌شود فایل‌های حذف‌شده هم commit شوند
           skip_dirty_check: false
           skip_fetch: false
-          # اگر می‌خواهید فقط وقتی تغییری هست push کند (اختیاری)
           push_options: '--force-with-lease'
