@@ -117,25 +117,24 @@ def generate_daily_report(date_str):
         best_pnl = worst_pnl = 0.0
         best_symbol = worst_symbol = "N/A"
 
-    # گزارش شکیل با Markdown
-    report = f"📅 **گزارش روزانه سیگنال‌های Hit شده - تاریخ: {date_str}**\n\n"
-    report += f"🔢 **تعداد سیگنال‌های فعال‌شده (TP یا SL)**: {hit_count}\n"
-    report += f"   - 🟢 LONG: {long_count} ({long_count/hit_count*100:.1f}%)\n"
-    report += f"   - 🔴 SHORT: {short_count} ({short_count/hit_count*100:.1f}%)\n\n"
-    report += f"📊 **سطوح ریسک** (فقط در سیگنال‌های hit شده):\n"
-    report += f"   - 🟢 LOW: {low_risk} ({low_risk/hit_count*100:.1f}%)\n"
-    report += f"   - 🟡 MEDIUM: {medium_risk} ({medium_risk/hit_count*100:.1f}%)\n"
-    report += f"   - 🔴 HIGH: {high_risk} ({high_risk/hit_count*100:.1f}%)\n\n"
-    report += f"🛡️ **وضعیت Hit**:\n"
-    report += f"   - ✅ TP_HIT: {tp_hit_count} ({tp_hit_count/hit_count*100:.1f}%)\n"
-    report += f"   - ❌ STOP_HIT: {stop_hit_count} ({stop_hit_count/hit_count*100:.1f}%)\n\n"
-    report += f"💹 **عملکرد مالی (فقط TP_HIT و STOP_HIT)**:\n"
-    report += f"   - نرخ موفقیت (TP): {success_rate:.1f}%\n"
-    report += f"   - مجموع PNL (USD): {total_pnl:.2f}\n"
-    report += f"   - میانگین PNL هر سیگنال hit شده: {avg_pnl:.2f}\n"
-    report += f"   - بهترین نتیجه: {best_pnl:.2f} USD (نماد: {best_symbol})\n"
-    report += f"   - بدترین نتیجه: {worst_pnl:.2f} USD (نماد: {worst_symbol})\n\n"
-    report += f"ℹ️ **نکته مهم**: فقط سیگنال‌هایی که SL یا TP آن‌ها فعال شده در این گزارش محاسبه شده‌اند. سیگنال‌های OPEN و CLOSED_MANUAL کاملاً نادیده گرفته شده‌اند."
+    report = f"<b>📅 گزارش روزانه سیگنال‌های Hit شده - تاریخ: {date_str}</b>\n\n"
+    report += f"<b>🔢 تعداد سیگنال‌های فعال‌شده (TP یا SL):</b> {hit_count}\n"
+    report += f"   • 🟢 LONG: {long_count} ({long_count/hit_count*100:.1f}%)\n"
+    report += f"   • 🔴 SHORT: {short_count} ({short_count/hit_count*100:.1f}%)\n\n"
+    report += f"<b>📊 سطوح ریسک (فقط hit شده):</b>\n"
+    report += f"   • 🟢 LOW: {low_risk} ({low_risk/hit_count*100:.1f}%)\n"
+    report += f"   • 🟡 MEDIUM: {medium_risk} ({medium_risk/hit_count*100:.1f}%)\n"
+    report += f"   • 🔴 HIGH: {high_risk} ({high_risk/hit_count*100:.1f}%)\n\n"
+    report += f"<b>🛡️ وضعیت Hit:</b>\n"
+    report += f"   • ✅ TP_HIT: {tp_hit_count} ({tp_hit_count/hit_count*100:.1f}%)\n"
+    report += f"   • ❌ STOP_HIT: {stop_hit_count} ({stop_hit_count/hit_count*100:.1f}%)\n\n"
+    report += f"<b>💹 عملکرد مالی (فقط TP_HIT و STOP_HIT):</b>\n"
+    report += f"   • نرخ موفقیت (TP): {success_rate:.1f}%\n"
+    report += f"   • مجموع PNL (USD): {total_pnl:.2f}\n"
+    report += f"   • میانگین PNL: {avg_pnl:.2f}\n"
+    report += f"   • بهترین نتیجه: {best_pnl:.2f} USD (نماد: {best_symbol})\n"
+    report += f"   • بدترین نتیجه: {worst_pnl:.2f} USD (نماد: {worst_symbol})\n\n"
+    report += f"<i>ℹ️ نکته: فقط TP_HIT و STOP_HIT محاسبه شده‌اند. OPEN و CLOSED_MANUAL نادیده گرفته شدند.</i>"
 
     return report
 
@@ -145,7 +144,7 @@ async def send_to_telegram(text: str):
         logger.warning("⚠️ تنظیمات تلگرام ناقص است")
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "Markdown"}
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"}
 
     logger.info("📤 تلاش برای ارسال پیام تلگرام...")
     async with aiohttp.ClientSession() as session:
