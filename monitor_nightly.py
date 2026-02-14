@@ -3,6 +3,7 @@ import csv
 import os
 import time
 import requests
+import subprocess  # برای git commit/push
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -174,61 +175,81 @@ def update_csv_rows(date_str):
         print(f"✅ وضعیت سیگنال‌های {date_str} آپدیت شد: {path}")
         print("="*80)
 
-       # ────────────────────────────────────────────────
-    # پاکسازی فایل‌های قدیمی - با همان روشی که فایل ساخته می‌شود
-    print("\n" + "═"*80)
-    print("🗑️ پاکسازی فایل‌های قدیمی‌تر از ۱۰ روز (با روش daily_csv_path)")
-    
+    # ────────────────────────────────────────────────
+    # پاکسازی فایل‌های قدیمی‌تر از ۱۰ روز - با روش daily_csv_path
     now_tehran = tehran_now()
     threshold_date = now_tehran - timedelta(days=10)
     threshold_str = threshold_date.strftime("%Y-%m-%d")
-    
-    print(f"تاریخ آستانه حذف: {threshold_str} (فایل‌های قبل از این تاریخ حذف می‌شوند)")
-    
-    if not os.path.isdir(SIGNALS_DIR):
-        print(f"پوشه {SIGNALS_DIR} وجود ندارد → هیچ فایلی برای حذف نیست")
-        return
-    
+
+    print("\n🗑️ پاکسازی فایل‌های قدیمی‌تر از {threshold_str} ...")
+
     deleted_count = 0
-    kept_count   = 0
+    kept_count = 0
     invalid_count = 0
-    
+
+    if not os.path.isdir(SIGNALS_DIR):
+        print(f"   پوشه {SIGNALS_DIR} وجود ندارد → هیچ فایلی برای حذف نیست")
+        return
+
     for filename in os.listdir(SIGNALS_DIR):
         if not filename.lower().endswith(".csv"):
             continue
-            
-        full_path = os.path.join(SIGNALS_DIR, filename)
-        
-        # دقیقاً همان فرمت نام فایل را چک می‌کنیم
-        try:
-            date_part = filename[:-4]           # حذف .csv
-            file_date = datetime.strptime(date_part, "%Y-%m-%d").date()
-            
-            if file_date < threshold_date.date():
-                try:
-                    os.remove(full_path)
-                    print(f"   حذف شد → {filename}   ({file_date})")
-                    deleted_count += 1
-                except PermissionError:
-                    print(f"   خطای مجوز - نتوانست حذف شود → {filename}")
-                    invalid_count += 1
-                except Exception as e:
-                    print(f"   خطا هنگام حذف {filename}: {e}")
-                    invalid_count += 1
-            else:
-                print(f"   نگه داشته شد → {filename}   ({file_date})")
-                kept_count += 1
-                
-        except ValueError:
-            print(f"   نام فایل نامنطبق با فرمت YYYY-MM-DD.csv → رد شد: {filename}")
-            invalid_count += 1
-    
-    print("\nنتیجه نهایی پاکسازی:")
-    print(f"   حذف موفق       : {deleted_count} فایل")
-    print(f"   نگه داشته شده  : {kept_count} فایل")
-    print(f"   مشکل‌دار / نامعتبر : {invalid_count} فایل")
-    print("═"*80)
 
+        full_path = os.path.join(SIGNALS_DIR, filename)
+
+        try:
+            date_part = filename[:-4].strip()
+            file_date = datetime.strptime(date_part, "%Y-%m-%d").date()
+
+            if file_date < threshold_date.date():
+                os.remove(full_path)
+                print(f"   حذف شد → {filename} ({file_date})")
+                deleted_count += 1
+            else:
+                print(f"   نگه داشته شد → {filename} ({file_date})")
+                kept_count += 1
+
+        except ValueError:
+            print(f"   رد شد (نام فایل نامعتبر) → {filename}")
+            invalid_count += 1
+        except PermissionError:
+            print(f"   خطای مجوز حذف → {filename}")
+            invalid_count += 1
+        except Exception as e:
+            print(f"   خطا در پردازش {filename}: {e}")
+            invalid_count += 1
+
+    print(f"\nنتیجه پاکسازی:")
+    print(f"   حذف شده: {deleted_count} فایل")
+    print(f"   نگه داشته شده: {kept_count} فایل")
+    print(f"   نامعتبر / خطادار: {invalid_count} فایل")
+    print("="*80)
+
+    # ────────────────────────────────────────────────
+    # خودکار commit و push تغییرات به GitHub (برای Actions)
+    if deleted_count > 0:
+        print("\n📤 تلاش برای commit و push حذف‌ها به GitHub...")
+        try:
+            # تنظیم user برای git
+            subprocess.run(["git", "config", "--global", "user.name", "GitHub Action"], check=True)
+            subprocess.run(["git", "config", "--global", "user.email", "action@github.com"], check=True)
+
+            # stage تغییرات (حذف‌ها)
+            subprocess.run(["git", "add", "-u", SIGNALS_DIR], check=True)
+
+            # commit اگر تغییری بود
+            commit_output = subprocess.run(["git", "commit", "-m", f"حذف خودکار {deleted_count} فایل قدیمی signals"], capture_output=True, text=True)
+            if "nothing to commit" in commit_output.stdout or commit_output.returncode != 0:
+                print("⚠️ هیچ تغییری برای commit نبود یا خطا رخ داد")
+            else:
+                # push به origin (در Actions، GITHUB_TOKEN مدیریت می‌کند)
+                subprocess.run(["git", "push", "origin", "HEAD"], check=True)
+                print("✅ تغییرات با موفقیت push شد به GitHub")
+
+        except subprocess.CalledProcessError as e:
+            print(f"❌ خطا در git command: {e.stderr}")
+        except Exception as e:
+            print(f"❌ خطای کلی در git push: {e}")
 
 if __name__ == "__main__":
     now_tehran = tehran_now()
