@@ -1,4 +1,4 @@
-name: NightlySignalMonitor
+name: Nightly Signal Monitor & Cleanup
 
 on:
   schedule:
@@ -8,26 +8,40 @@ on:
 jobs:
   monitor:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write       # ← مهم: اجازه نوشتن/حذف لازم است
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0      # ← مهم برای دیدن تاریخچه و حذف درست
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5   # بهتر است از v5 استفاده شود
         with:
           python-version: '3.11'
 
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
 
-      - name: Run nightly monitor
-        run: |
-          python monitor_nightly.py
+      - name: Run nightly monitor & cleanup
+        run: python monitor_nightly.py
 
-      - name: Commit updated CSV
+      - name: Commit changes (updates + deletions)
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Nightly monitor: update daily CSV statuses"
+          commit_message: |
+            Nightly monitor: 
+            - Updated CSV statuses
+            - Removed old signal files older than 10 days
           file_pattern: signals/*.csv
+          # این گزینه باعث می‌شود فایل‌های حذف‌شده هم commit شوند
+          skip_dirty_check: false
+          skip_fetch: false
+          # اگر می‌خواهید فقط وقتی تغییری هست push کند (اختیاری)
+          push_options: '--force-with-lease'
