@@ -61,8 +61,8 @@ SYMBOLS = [
 
 # ⚙️ پارامترهای مدیریت ریسک دینامیک
 RISK_PARAMS = {
-    'atr_multiplier': 1.8,   # فاصله استاپ از ورود بر اساس ATR
-    'rr_target': 1.6,        # نسبت هدف به ریسک
+    'atr_multiplier': 1.6,   # فاصله استاپ از ورود بر اساس ATR
+    'rr_target': 2.0,        # نسبت هدف به ریسک
     'swing_lookback': 10,    # نگاه به 10 کندل اخیر برای Swing
     'rr_fallback': 2.0       # اگر ATR نباشد، RR بر اساس Swing
 }
