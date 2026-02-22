@@ -11,7 +11,7 @@ from config import (
     INDICATOR_THRESHOLDS, ADVANCED_RISK_PARAMS,
     TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 )
-from indicators import calculate_adx, calculate_cci, calculate_sar, calculate_stochastic, calculate_ema, calculate_swing_low
+from indicators import calculate_adx, calculate_cci, calculate_sar, calculate_stochastic, calculate_ema, calculate_swing_low, calculate_swing_high
 from patterns import ema_rejection, resistance_test, pullback, double_top_bottom
 from signal_store import append_signal_row, tehran_time_str, compose_signal_source
 
