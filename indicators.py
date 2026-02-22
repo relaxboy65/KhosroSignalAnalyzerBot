@@ -74,24 +74,40 @@ def body_strength(candle):
     return body / total_range
 # ===== ADX =====
 def calculate_adx(candles, period=14):
-    if len(candles) < period + 1:
-        return None
+    if len(candles) < period * 2:
+        return None, None, None
     plus_dm, minus_dm, tr_list = [], [], []
-    for i in range(1, len(candles)):
-        high, low = candles[i]['h'], candles[i]['l']
-        prev_high, prev_low, prev_close = candles[i-1]['h'], candles[i-1]['l'], candles[i-1]['c']
+    prev_close = candles[0]['c']
+    prev_high = candles[0]['h']
+    prev_low = candles[0]['l']
+    for c in candles[1:]:
+        high, low, close = c['h'], c['l'], c['c']
         up_move = high - prev_high
         down_move = prev_low - low
         plus_dm.append(up_move if up_move > down_move and up_move > 0 else 0)
         minus_dm.append(down_move if down_move > up_move and down_move > 0 else 0)
         tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
         tr_list.append(tr)
+        prev_high, prev_low, prev_close = high, low, close
     atr = sum(tr_list[:period]) / period
     plus_di = 100 * (sum(plus_dm[:period]) / atr) if atr else 0
     minus_di = 100 * (sum(minus_dm[:period]) / atr) if atr else 0
     dx = abs(plus_di - minus_di) / (plus_di + minus_di) * 100 if (plus_di + minus_di) != 0 else 0
-    return round(dx, 2)
+    return round(dx, 2), round(plus_di, 2), round(minus_di, 2)  # ADX, DI+, DI-
 
+def calculate_swing_low(candles, lookback=10):
+    if len(candles) < lookback:
+        return None
+    lows = [c['l'] for c in candles[-lookback:]]
+    return min(lows) if lows else None
+
+# تابع جدید برای Swing High (برای SHORT)
+def calculate_swing_high(candles, lookback=10):
+    if len(candles) < lookback:
+        return None
+    highs = [c['h'] for c in candles[-lookback:]]
+    return max(highs) if highs else None
+    
 # ===== CCI =====
 def calculate_cci(candles, period=20):
     if len(candles) < period:
