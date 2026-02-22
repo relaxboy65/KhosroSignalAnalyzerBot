@@ -11,7 +11,7 @@ from config import (
     INDICATOR_THRESHOLDS, ADVANCED_RISK_PARAMS,
     TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 )
-from indicators import calculate_adx, calculate_cci, calculate_sar, calculate_stochastic, calculate_ema
+from indicators import calculate_adx, calculate_cci, calculate_sar, calculate_stochastic, calculate_ema, calculate_swing_low
 from patterns import ema_rejection, resistance_test, pullback, double_top_bottom
 from signal_store import append_signal_row, tehran_time_str, compose_signal_source
 
@@ -61,29 +61,27 @@ def rule_body_strength_5m(open_5m: float, close_5m: float, high_5m: float, low_5
     ok = bs >= th
     return RuleResult("قدرت کندل 5m", ok, f"BS5={bs:.3f} [حد ≥ {th}]")
 
-def rule_trend_1h(ema21_1h: float, ema55_1h: float, direction: str, risk_rules: dict) -> RuleResult:
-    if ema21_1h is None or ema55_1h is None:
+def rule_trend_1h(ema21_1h: float, ema50_1h: float, direction: str, risk_rules: dict) -> RuleResult:
+    if ema21_1h is None or ema50_1h is None:
         return RuleResult("روند EMA 1h", False, "داده EMA 1h موجود نیست")
-    ok = (ema21_1h > ema55_1h) if direction == "LONG" else (ema21_1h < ema55_1h)
-    return RuleResult("روند EMA 1h", ok, f"EMA21={ema21_1h:.2f}, EMA55={ema55_1h:.2f}")
+    ok = (ema21_1h > ema50_1h) if direction == "LONG" else (ema21_1h < ema50_1h)
+    return RuleResult("روند EMA 1h", ok, f"EMA21={ema21_1h:.2f}, EMA50={ema50_1h:.2f}")
 
-def rule_trend_4h(ema21_4h: float, ema55_4h: float, ema200_4h: float, direction: str, risk_rules: dict) -> RuleResult:
-    if ema21_4h is None or ema55_4h is None:
+def rule_trend_4h(ema21_4h: float, ema50_4h: float, ema200_4h: float, direction: str, risk_rules: dict) -> RuleResult:
+    if ema21_4h is None or ema50_4h is None:
         return RuleResult("روند EMA 4h", False, "داده EMA 4h موجود نیست")
     if ema200_4h is None:
         ema200_4h = 0.0
-    ok = (ema21_4h > ema55_4h and ema55_4h > ema200_4h) if direction == "LONG" else (ema21_4h < ema55_4h and ema55_4h < ema200_4h)
-    return RuleResult("روند EMA 4h", ok, f"EMA21={ema21_4h:.2f}, EMA55={ema55_4h:.2f}, EMA200={ema200_4h:.2f}")
+    ok = (ema21_4h > ema50_4h and ema50_4h > ema200_4h) if direction == "LONG" else (ema21_4h < ema50_4h and ema50_4h < ema200_4h)
+    return RuleResult("روند EMA 4h", ok, f"EMA21={ema21_4h:.2f}, EMA50={ema50_4h:.2f}, EMA200={ema200_4h:.2f}")
 
 def rule_rsi(rsi_30m: float, direction: str, risk_rules: dict, risk_level: str) -> RuleResult:
-    # آستانه‌ها بر اساس سطح ریسک
     if risk_level == "LOW":
         ok = (rsi_30m > 55) if direction == "LONG" else (rsi_30m < 45)
     elif risk_level == "MEDIUM":
         ok = (rsi_30m > 50) if direction == "LONG" else (rsi_30m < 50)
     else:  # HIGH
         ok = (rsi_30m > 45) if direction == "LONG" else (rsi_30m < 55)
-
     return RuleResult("RSI 30m", ok, f"RSI={rsi_30m:.2f} | سطح={risk_level}")
 
 def rule_macd(macd_hist_30m, direction: str, risk_rules: dict, risk_level: str) -> RuleResult:
@@ -109,11 +107,12 @@ def rule_entry_break(price_30m: float, ema21_30m: float, direction: str, risk_ru
 
 # ===== قوانین پیشرفته =====
 def rule_adx(candles: list, direction: str) -> RuleResult:
-    adx = calculate_adx(candles)
+    adx, di_plus, di_minus = calculate_adx(candles)
     if adx is None:
         return RuleResult("ADX", False, "داده ADX موجود نیست")
     ok = adx > INDICATOR_THRESHOLDS["ADX_STRONG"]
-    return RuleResult("ADX", ok, f"ADX={adx:.2f} [حد > {INDICATOR_THRESHOLDS['ADX_STRONG']}]")
+    detail = f"ADX={adx:.2f} [حد > {INDICATOR_THRESHOLDS['ADX_STRONG']}]"
+    return RuleResult("ADX", ok, detail)
 
 def rule_cci(candles: list, direction: str) -> RuleResult:
     cci = calculate_cci(candles)
@@ -142,8 +141,8 @@ def rule_ema_rejection(prices_series_30m: list, ema21_30m: float) -> RuleResult:
     rejected = ema_rejection(prices_series_30m, ema21_30m)
     return RuleResult("رد EMA", rejected, "رد EMA تشخیص داده شد" if rejected else "بدون رد")
 
-def rule_resistance_test(prices_series_30m: list, ema55_30m: float) -> RuleResult:
-    tested = resistance_test(prices_series_30m, ema55_30m)
+def rule_resistance_test(prices_series_30m: list, ema50_30m: float) -> RuleResult:
+    tested = resistance_test(prices_series_30m, ema50_30m)
     return RuleResult("تست مقاومت", tested, "تست مقاومت تایید شد" if tested else "بدون تست")
 
 def rule_pullback(prices_series_30m: list, direction: str) -> RuleResult:
@@ -155,16 +154,22 @@ def rule_double_top_bottom(prices_series_30m: list) -> RuleResult:
     ok = pattern is not None
     return RuleResult("Double Top/Bottom", ok, f"الگو={pattern}" if ok else "بدون الگو")
 
+# ===== فیلتر رنج جدید =====
+def rule_range_filter(ema21_30m: float, ema50_30m: float, price_30m: float) -> RuleResult:
+    diff = abs(ema21_30m - ema50_30m) / price_30m if price_30m > 0 else 0
+    ok = diff > 0.007
+    return RuleResult("فیلتر رنج", ok, f"فاصله EMA={diff:.4f} [حد > 0.007]")
+
 # ===== ارزیابی قوانین =====
-# نقشه گروه‌بندی قوانین به وزن‌ها (برای اصلاح محاسبه وزن)
+# نقشه گروه‌بندی قوانین به وزن‌ها
 RULE_GROUP_MAP = {
     "قدرت کندل 15m": "Candles",
     "قدرت کندل 5m": "Candles",
     "روند EMA 1h": "EMA",
     "روند EMA 4h": "TF_Big",
-    "RSI 30m": "RSI",  # اضافه کردن اگر لازم، اما در RISK_FACTORS نیست، پس به "Confirm" map می‌کنم
-    "MACD 30m": "MACD",  # مشابه
-    "شکست ورود": "Entry",
+    "RSI 30m": "Confirm",
+    "MACD 30m": "Confirm",
+    "شکست ورود": "Confirm",
     "ADX": "ADX",
     "CCI": "CCI",
     "SAR": "SAR",
@@ -173,7 +178,7 @@ RULE_GROUP_MAP = {
     "تست مقاومت": "Patterns",
     "پولبک": "Patterns",
     "Double Top/Bottom": "Patterns",
-    # اگر قوانین دیگری اضافه شد، اینجا map کنید
+    "فیلتر رنج": "RiskMgmt",  # جدید
 }
 
 def evaluate_rules(
@@ -185,9 +190,9 @@ def evaluate_rules(
     open_15m: float, close_15m: float, high_15m: float, low_15m: float,
     open_5m: float, close_5m: float, high_5m: float, low_5m: float,
     open_1m: float, close_1m: float, high_1m: float, low_1m: float,
-    ema21_30m: float, ema8_30m: float,
-    ema21_1h: float, ema55_1h: float,
-    ema21_4h: float, ema55_4h: float, ema200_4h: float,
+    ema21_30m: float, ema50_30m: float, ema8_30m: float,
+    ema21_1h: float, ema50_1h: float,
+    ema21_4h: float, ema50_4h: float, ema200_4h: float,
     macd_hist_30m: float,
     rsi_30m: float,
     vol_spike_factor: float,
@@ -200,8 +205,8 @@ def evaluate_rules(
     rule_results = [
         rule_body_strength(open_15m, close_15m, high_15m, low_15m, risk_rules),
         rule_body_strength_5m(open_5m, close_5m, high_5m, low_5m, risk_rules),
-        rule_trend_1h(ema21_1h, ema55_1h, direction, risk_rules),
-        rule_trend_4h(ema21_4h, ema55_4h, ema200_4h, direction, risk_rules),
+        rule_trend_1h(ema21_1h, ema50_1h, direction, risk_rules),
+        rule_trend_4h(ema21_4h, ema50_4h, ema200_4h, direction, risk_rules),
         rule_rsi(rsi_30m, direction, risk_rules, risk),
         rule_macd(macd_hist_30m, direction, risk_rules, risk),
         rule_entry_break(price_30m, ema21_30m, direction, risk_rules, risk),
@@ -210,9 +215,10 @@ def evaluate_rules(
         rule_sar(candles, direction),
         rule_stochastic(candles, direction),
         rule_ema_rejection(prices_series_30m, ema21_30m),
-        rule_resistance_test(prices_series_30m, ema55_30m if 'ema55_30m' in locals() else ema21_30m),  # اگر ema55_30m تعریف نشده، از ema21 استفاده کن
+        rule_resistance_test(prices_series_30m, ema50_30m),
         rule_pullback(prices_series_30m, direction),
-        rule_double_top_bottom(prices_series_30m)
+        rule_double_top_bottom(prices_series_30m),
+        rule_range_filter(ema21_30m, ema50_30m, price_30m),  # فیلتر جدید
     ]
 
     # محاسبه وزن با استفاده از map گروهی
@@ -230,9 +236,9 @@ async def generate_signal(
     open_15m: float, close_15m: float, high_15m: float, low_15m: float,
     open_5m: float, close_5m: float, high_5m: float, low_5m: float,
     open_1m: float, close_1m: float, high_1m: float, low_1m: float,
-    ema21_30m: float, ema55_30m: float, ema8_30m: float,
-    ema21_1h: float, ema55_1h: float,
-    ema21_4h: float, ema55_4h: float, ema200_4h: float,
+    ema21_30m: float, ema50_30m: float, ema8_30m: float,
+    ema21_1h: float, ema50_1h: float,
+    ema21_4h: float, ema50_4h: float, ema200_4h: float,
     macd_line_30m: float, hist_30m: float,
     rsi_30m: float,
     atr_val_30m: float,
@@ -255,9 +261,9 @@ async def generate_signal(
         open_15m=open_15m, close_15m=close_15m, high_15m=high_15m, low_15m=low_15m,
         open_5m=open_5m, close_5m=close_5m, high_5m=high_5m, low_5m=low_5m,
         open_1m=open_1m, close_1m=close_1m, high_1m=high_1m, low_1m=low_1m,
-        ema21_30m=ema21_30m, ema8_30m=ema8_30m,
-        ema21_1h=ema21_1h, ema55_1h=ema55_1h,
-        ema21_4h=ema21_4h, ema55_4h=ema55_4h, ema200_4h=ema200_4h,
+        ema21_30m=ema21_30m, ema50_30m=ema50_30m, ema8_30m=ema8_30m,
+        ema21_1h=ema21_1h, ema50_1h=ema50_1h,
+        ema21_4h=ema21_4h, ema50_4h=ema50_4h, ema200_4h=ema200_4h,
         macd_hist_30m=hist_30m,
         rsi_30m=rsi_30m,
         vol_spike_factor=1.0,
@@ -276,12 +282,16 @@ async def generate_signal(
     else:
         atr_mult, rr_target = 1.5, 1.5
 
-    # محاسبه استاپ و تارگت
+    # محاسبه استاپ و تارگت - جدید: استاپ ساختارمحور
     if direction == "LONG":
-        stop_loss = price_30m - atr_val_30m * atr_mult
+        swing_low = calculate_swing_low(candles)
+        buffer = 0.001 * price_30m  # buffer کوچک
+        stop_loss = swing_low - buffer
         take_profit = price_30m + (price_30m - stop_loss) * rr_target
     else:
-        stop_loss = price_30m + atr_val_30m * atr_mult
+        swing_high = calculate_swing_high(candles)  # فرض بر وجود تابع calculate_swing_high
+        buffer = 0.001 * price_30m
+        stop_loss = swing_high + buffer
         take_profit = price_30m - (stop_loss - price_30m) * rr_target
 
     # دسته‌بندی ریسک نهایی
@@ -319,7 +329,7 @@ async def generate_signal(
     logger.info("=" * 80)
 
     signal_dict = {
-        "symbol": symbol,
+"symbol": symbol,
         "direction": direction,
         "risk": final_risk,
         "status": status,
