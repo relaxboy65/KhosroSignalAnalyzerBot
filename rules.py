@@ -48,7 +48,7 @@ async def send_to_telegram(text: str):
         except Exception as e:
             logger.error(f"❌ خطا در ارسال به تلگرام: {e}")
 
-# ===== قوانین پایه (بدون تغییر) =====
+# ===== قوانین پایه =====
 def rule_body_strength(open_15m, close_15m, high_15m, low_15m, risk_rules) -> RuleResult:
     bs = abs(close_15m - open_15m) / max(high_15m - low_15m, 1e-6)
     th = risk_rules.get("candle_15m_strength", 0.5)
@@ -96,7 +96,7 @@ def rule_macd(macd_hist, direction, risk_level) -> RuleResult:
 # ===== مرحله ۲: ورود هوشمند پولبک =====
 def rule_smart_pullback_entry(price_30m, ema21_30m, rsi_30m, open_15m, close_15m, high_15m, low_15m, direction) -> RuleResult:
     if direction == "LONG":
-        pullback_ok = price_30m < ema21_30m * 0.997          # حداقل ۰.۳٪ پولبک
+        pullback_ok = price_30m < ema21_30m * 0.997
         rsi_ok = 50 <= rsi_30m <= 60
         bs = abs(close_15m - open_15m) / max(high_15m - low_15m, 1e-8)
         candle_strong = bs >= 0.65
@@ -109,7 +109,6 @@ def rule_smart_pullback_entry(price_30m, ema21_30m, rsi_30m, open_15m, close_15m
         candle_strong = bs >= 0.65
         ok = pullback_ok and rsi_ok and candle_strong
         detail = f"قیمت={price_30m:.4f} EMA={ema21_30m:.4f} RSI={rsi_30m:.1f} BS15={bs:.3f}"
-    
     return RuleResult("ورود هوشمند پولبک", ok, detail)
 
 # ===== مرحله ۳: مومنتوم جدید =====
@@ -130,7 +129,7 @@ def rule_stochastic_momentum(candles, direction) -> RuleResult:
         ok = (k < d) and (k > 40) and (k < 80)
     return RuleResult("Stochastic کراس", ok, f"K={k:.2f} D={d:.2f}")
 
-# ===== قوانین پیشرفته (مرحله ۱) =====
+# ===== قوانین مرحله ۱ (بدون تغییر) =====
 def rule_adx(candles: list, direction: str) -> RuleResult:
     adx, di_plus, di_minus = calculate_adx(candles)
     if adx is None:
@@ -152,7 +151,7 @@ def rule_range_filter(ema21_30m: float, ema50_30m: float, price_30m: float) -> R
     ok = diff > 0.007
     return RuleResult("فیلتر رنج", ok, f"فاصله EMA={diff:.4f} [>0.007]")
 
-# ===== قوانین الگو (بدون تغییر) =====
+# ===== قوانین الگو =====
 def rule_ema_rejection(prices_series_30m: list, ema21_30m: float) -> RuleResult:
     rejected = ema_rejection(prices_series_30m, ema21_30m)
     return RuleResult("رد EMA", rejected, "رد EMA تشخیص داده شد" if rejected else "بدون رد")
@@ -170,8 +169,7 @@ def rule_double_top_bottom(prices_series_30m: list) -> RuleResult:
     ok = pattern is not None
     return RuleResult("Double Top/Bottom", ok, f"الگو={pattern}" if ok else "بدون الگو")
 
-# ===== ارزیابی قوانین =====
-# نقشه گروه‌بندی قوانین به وزن‌ها
+# ===== ارزیابی قوانین (اصلاح شده) =====
 RULE_GROUP_MAP = {
     "قدرت کندل 15m": "Candles",
     "قدرت کندل 5m": "Candles",
@@ -179,23 +177,20 @@ RULE_GROUP_MAP = {
     "روند EMA 4h": "TF_Big",
     "RSI 30m": "Confirm",
     "MACD 30m": "Confirm",
-    "شکست ورود": "Confirm",
+    "ورود هوشمند پولبک": "Confirm",      # ← تغییر نام
     "ADX": "ADX",
-    "CCI": "CCI",
+    "CCI مومنتوم": "CCI",                # ← تغییر نام
     "SAR": "SAR",
-    "Stochastic": "Stoch",
+    "Stochastic کراس": "Stoch",          # ← تغییر نام
     "رد EMA": "Patterns",
     "تست مقاومت": "Patterns",
     "پولبک": "Patterns",
     "Double Top/Bottom": "Patterns",
-    "فیلتر رنج": "RiskMgmt",  # جدید
+    "فیلتر رنج": "RiskMgmt",
 }
 
 def evaluate_rules(
-    symbol: str,
-    direction: str,
-    risk: str,
-    risk_rules: dict,
+    symbol: str, direction: str, risk: str, risk_rules: dict,
     price_30m: float,
     open_15m: float, close_15m: float, high_15m: float, low_15m: float,
     open_5m: float, close_5m: float, high_5m: float, low_5m: float,
@@ -203,39 +198,36 @@ def evaluate_rules(
     ema21_30m: float, ema50_30m: float, ema8_30m: float,
     ema21_1h: float, ema50_1h: float,
     ema21_4h: float, ema50_4h: float, ema200_4h: float,
-    macd_hist_30m: float,
-    rsi_30m: float,
-    vol_spike_factor: float,
-    divergence_detected: bool,
-    candles: list,
-    prices_series_30m: list,
-    closes_by_tf: dict
+    macd_hist_30m: float, rsi_30m: float,
+    vol_spike_factor: float, divergence_detected: bool,
+    candles: list, prices_series_30m: list, closes_by_tf: dict
 ) -> Tuple[List[RuleResult], float, float]:
-    weights = RISK_FACTORS.get(risk, {})
+
     rule_results = [
         rule_body_strength(open_15m, close_15m, high_15m, low_15m, risk_rules),
         rule_body_strength_5m(open_5m, close_5m, high_5m, low_5m, risk_rules),
-        rule_trend_1h(ema21_1h, ema50_1h, direction, risk_rules),
-        rule_trend_4h(ema21_4h, ema50_4h, ema200_4h, direction, risk_rules),
-        rule_rsi(rsi_30m, direction, risk_rules, risk),
-        rule_macd(macd_hist_30m, direction, risk_rules, risk),
-        rule_entry_break(price_30m, ema21_30m, direction, risk_rules, risk),
+        rule_trend_1h(ema21_1h, ema50_1h, direction),
+        rule_trend_4h(ema21_4h, ema50_4h, ema200_4h, direction),
+        rule_rsi(rsi_30m, direction, risk),
+        rule_macd(macd_hist_30m, direction, risk),
+        rule_smart_pullback_entry(price_30m, ema21_30m, rsi_30m, open_15m, close_15m, high_15m, low_15m, direction),  # مرحله ۲
         rule_adx(candles, direction),
-        rule_cci_momentum(candles, direction),          # ← مرحله ۳
+        rule_cci_momentum(candles, direction),          # مرحله ۳
         rule_sar(candles, direction),
-        rule_stochastic_momentum(candles, direction),   # ← مرحله ۳
+        rule_stochastic_momentum(candles, direction),   # مرحله ۳
         rule_ema_rejection(prices_series_30m, ema21_30m),
         rule_resistance_test(prices_series_30m, ema50_30m),
         rule_pullback(prices_series_30m, direction),
         rule_double_top_bottom(prices_series_30m),
-        rule_range_filter(ema21_30m, ema50_30m, price_30m),  # فیلتر جدید
+        rule_range_filter(ema21_30m, ema50_30m, price_30m),
     ]
 
-    # محاسبه وزن با استفاده از map گروهی
+    weights = RISK_FACTORS.get(risk, {})
     passed_weight = sum(weights.get(RULE_GROUP_MAP.get(r.name, "Other"), 0) for r in rule_results if r.passed)
     total_weight = sum(weights.get(RULE_GROUP_MAP.get(r.name, "Other"), 0) for r in rule_results)
 
     return rule_results, passed_weight, total_weight
+
 
 # ===== تولید سیگنال =====
 async def generate_signal(
