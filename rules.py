@@ -102,7 +102,7 @@ def rule_smart_pullback_entry(price_30m, ema21_30m, rsi_30m, open_15m, close_15m
         candle_strong = bs >= 0.65
         ok = pullback_ok and rsi_ok and candle_strong
         detail = f"قیمت={price_30m:.4f} EMA={ema21_30m:.4f} RSI={rsi_30m:.1f} BS15={bs:.3f}"
-    else:  # SHORT
+    else:
         pullback_ok = price_30m > ema21_30m * 1.003
         rsi_ok = 40 <= rsi_30m <= 50
         bs = abs(open_15m - close_15m) / max(high_15m - low_15m, 1e-8)
@@ -177,11 +177,11 @@ RULE_GROUP_MAP = {
     "روند EMA 4h": "TF_Big",
     "RSI 30m": "Confirm",
     "MACD 30m": "Confirm",
-    "ورود هوشمند پولبک": "Confirm",      # مرحله ۲
+    "ورود هوشمند پولبک": "Confirm",
     "ADX": "ADX",
-    "CCI مومنتوم": "CCI",                # مرحله ۳
+    "CCI مومنتوم": "CCI",
     "SAR": "SAR",
-    "Stochastic کراس": "Stoch",          # مرحله ۳
+    "Stochastic کراس": "Stoch",
     "رد EMA": "Patterns",
     "تست مقاومت": "Patterns",
     "پولبک": "Patterns",
@@ -210,11 +210,11 @@ def evaluate_rules(
         rule_trend_4h(ema21_4h, ema50_4h, ema200_4h, direction),
         rule_rsi(rsi_30m, direction, risk),
         rule_macd(macd_hist_30m, direction, risk),
-        rule_smart_pullback_entry(price_30m, ema21_30m, rsi_30m, open_15m, close_15m, high_15m, low_15m, direction),  # مرحله ۲
+        rule_smart_pullback_entry(price_30m, ema21_30m, rsi_30m, open_15m, close_15m, high_15m, low_15m, direction),
         rule_adx(candles, direction),
-        rule_cci_momentum(candles, direction),          # مرحله ۳
+        rule_cci_momentum(candles, direction),
         rule_sar(candles, direction),
-        rule_stochastic_momentum(candles, direction),   # مرحله ۳
+        rule_stochastic_momentum(candles, direction),
         rule_ema_rejection(prices_series_30m, ema21_30m),
         rule_resistance_test(prices_series_30m, ema50_30m),
         rule_pullback(prices_series_30m, direction),
@@ -274,7 +274,6 @@ async def generate_signal(
         closes_by_tf=closes_by_tf
     )
 
-    # مدیریت ریسک پویا
     strength_ratio = passed_weight / total_weight if total_weight > 0 else 0
     if strength_ratio >= 0.7:
         atr_mult, rr_target = 1.0, 2.5
@@ -283,7 +282,6 @@ async def generate_signal(
     else:
         atr_mult, rr_target = 1.5, 1.5
 
-    # محاسبه استاپ و تارگت
     if direction == "LONG":
         swing_low = calculate_swing_low(candles)
         buffer = 0.001 * price_30m
@@ -295,7 +293,6 @@ async def generate_signal(
         stop_loss = swing_high + buffer if swing_high is not None else price_30m + atr_val_30m * atr_mult
         take_profit = price_30m - (stop_loss - price_30m) * rr_target
 
-    # دسته‌بندی ریسک نهایی
     core_rules = ["روند EMA 1h", "روند EMA 4h", "ADX", "RSI 30m"]
     core_passed = all(any(r.name == cr and r.passed for r in rule_results) for cr in core_rules)
     if core_passed:
@@ -307,7 +304,6 @@ async def generate_signal(
 
     status = "SIGNAL" if passed_weight >= total_weight * 0.6 else "NO_SIGNAL"
 
-    # لاگ کامل
     passed_list = [str(r) for r in rule_results if r.passed]
     failed_list = [str(r) for r in rule_results if not r.passed]
     total_rules = len(rule_results)
