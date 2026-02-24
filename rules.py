@@ -11,13 +11,16 @@ from config import (
     INDICATOR_THRESHOLDS, ADVANCED_RISK_PARAMS,
     TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 )
-from indicators import calculate_adx, calculate_cci, calculate_sar, calculate_stochastic, calculate_ema, calculate_swing_low, calculate_swing_high
+from indicators import (
+    calculate_adx, calculate_cci, calculate_sar, 
+    calculate_stochastic, calculate_ema, 
+    calculate_swing_low, calculate_swing_high
+)
 from patterns import ema_rejection, resistance_test, pullback, double_top_bottom
-from signal_store import append_signal_row, tehran_time_str, compose_signal_source
+from signal_store import append_signal_row, tehran_time_str
 
 logger = logging.getLogger(__name__)
 
-# ✅ ساختار نتیجه هر قانون
 @dataclass
 class RuleResult:
     name: str
@@ -28,82 +31,102 @@ class RuleResult:
         status = "✅" if self.passed else "❌"
         return f"{status} {self.name}: {self.detail}"
 
-# ========== ارسال پیام به تلگرام ==========
+# ========== ارسال تلگرام ==========
 async def send_to_telegram(text: str):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         logger.warning("⚠️ تنظیمات تلگرام ناقص است")
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"}
-
-    logger.info("📤 تلاش برای ارسال پیام تلگرام...")
     async with aiohttp.ClientSession() as session:
         try:
             async with session.post(url, json=payload, timeout=20) as resp:
-                body = await resp.text()
                 if resp.status == 200:
                     logger.info("✅ پیام به تلگرام ارسال شد")
                 else:
-                    logger.warning(f"⚠️ خطا در ارسال تلگرام: {resp.status} | پاسخ: {body}")
+                    logger.warning(f"⚠️ خطا در ارسال تلگرام: {resp.status}")
         except Exception as e:
             logger.error(f"❌ خطا در ارسال به تلگرام: {e}")
 
 # ===== قوانین پایه =====
-def rule_body_strength(open_15m: float, close_15m: float, high_15m: float, low_15m: float, risk_rules: dict) -> RuleResult:
+def rule_body_strength(open_15m, close_15m, high_15m, low_15m, risk_rules) -> RuleResult:
     bs = abs(close_15m - open_15m) / max(high_15m - low_15m, 1e-6)
     th = risk_rules.get("candle_15m_strength", 0.5)
     ok = bs >= th
-    return RuleResult("قدرت کندل 15m", ok, f"BS15={bs:.3f} [حد ≥ {th}]")
+    return RuleResult("قدرت کندل 15m", ok, f"BS15={bs:.3f} [≥ {th}]")
 
-def rule_body_strength_5m(open_5m: float, close_5m: float, high_5m: float, low_5m: float, risk_rules: dict) -> RuleResult:
+def rule_body_strength_5m(open_5m, close_5m, high_5m, low_5m, risk_rules) -> RuleResult:
     bs = abs(close_5m - open_5m) / max(high_5m - low_5m, 1e-6)
     th = risk_rules.get("candle_5m_strength", 0.5)
     ok = bs >= th
-    return RuleResult("قدرت کندل 5m", ok, f"BS5={bs:.3f} [حد ≥ {th}]")
+    return RuleResult("قدرت کندل 5m", ok, f"BS5={bs:.3f} [≥ {th}]")
 
-def rule_trend_1h(ema21_1h: float, ema50_1h: float, direction: str, risk_rules: dict) -> RuleResult:
+def rule_trend_1h(ema21_1h, ema50_1h, direction) -> RuleResult:
     if ema21_1h is None or ema50_1h is None:
-        return RuleResult("روند EMA 1h", False, "داده EMA 1h موجود نیست")
+        return RuleResult("روند EMA 1h", False, "داده موجود نیست")
     ok = (ema21_1h > ema50_1h) if direction == "LONG" else (ema21_1h < ema50_1h)
     return RuleResult("روند EMA 1h", ok, f"EMA21={ema21_1h:.2f}, EMA50={ema50_1h:.2f}")
 
-def rule_trend_4h(ema21_4h: float, ema50_4h: float, ema200_4h: float, direction: str, risk_rules: dict) -> RuleResult:
+def rule_trend_4h(ema21_4h, ema50_4h, ema200_4h, direction) -> RuleResult:
     if ema21_4h is None or ema50_4h is None:
-        return RuleResult("روند EMA 4h", False, "داده EMA 4h موجود نیست")
-    if ema200_4h is None:
-        ema200_4h = 0.0
+        return RuleResult("روند EMA 4h", False, "داده موجود نیست")
     ok = (ema21_4h > ema50_4h and ema50_4h > ema200_4h) if direction == "LONG" else (ema21_4h < ema50_4h and ema50_4h < ema200_4h)
-    return RuleResult("روند EMA 4h", ok, f"EMA21={ema21_4h:.2f}, EMA50={ema50_4h:.2f}, EMA200={ema200_4h:.2f}")
+    return RuleResult("روند EMA 4h", ok, f"EMA21={ema21_4h:.2f}, EMA50={ema50_4h:.2f}")
 
-def rule_rsi(rsi_30m: float, direction: str, risk_rules: dict, risk_level: str) -> RuleResult:
+def rule_rsi(rsi_30m, direction, risk_level) -> RuleResult:
     if risk_level == "LOW":
         ok = (rsi_30m > 55) if direction == "LONG" else (rsi_30m < 45)
     elif risk_level == "MEDIUM":
         ok = (rsi_30m > 50) if direction == "LONG" else (rsi_30m < 50)
-    else:  # HIGH
-        ok = (rsi_30m > 45) if direction == "LONG" else (rsi_30m < 55)
-    return RuleResult("RSI 30m", ok, f"RSI={rsi_30m:.2f} | سطح={risk_level}")
-
-def rule_macd(macd_hist_30m, direction: str, risk_rules: dict, risk_level: str) -> RuleResult:
-    if isinstance(macd_hist_30m, list):
-        macd_hist_30m = macd_hist_30m[-1] if macd_hist_30m else 0.0
-
-    if risk_level == "LOW":
-        ok = (macd_hist_30m > 0.002) if direction == "LONG" else (macd_hist_30m < -0.002)
-    elif risk_level == "MEDIUM":
-        ok = (macd_hist_30m > 0) if direction == "LONG" else (macd_hist_30m < 0)
-    else:  # HIGH
-        ok = (macd_hist_30m >= -0.001) if direction == "LONG" else (macd_hist_30m <= 0.001)
-
-    return RuleResult("MACD 30m", ok, f"MACD_hist={macd_hist_30m:.4f} | سطح={risk_level}")
-
-def rule_entry_break(price_30m: float, ema21_30m: float, direction: str, risk_rules: dict, risk_level: str) -> RuleResult:
-    if risk_level == "LOW":
-        th = 0.0
     else:
-        th = risk_rules.get("entry_break_threshold", 0.003)
-    ok = (price_30m > ema21_30m * (1 + th)) if direction == "LONG" else (price_30m < ema21_30m * (1 - th))
-    return RuleResult("شکست ورود", ok, f"قیمت={price_30m:.2f}, EMA21={ema21_30m:.2f}, آستانه={th}")
+        ok = (rsi_30m > 45) if direction == "LONG" else (rsi_30m < 55)
+    return RuleResult("RSI 30m", ok, f"RSI={rsi_30m:.2f}")
+
+def rule_macd(macd_hist, direction, risk_level) -> RuleResult:
+    if isinstance(macd_hist, list):
+        macd_hist = macd_hist[-1] if macd_hist else 0.0
+    if risk_level == "LOW":
+        ok = (macd_hist > 0.002) if direction == "LONG" else (macd_hist < -0.002)
+    elif risk_level == "MEDIUM":
+        ok = (macd_hist > 0) if direction == "LONG" else (macd_hist < 0)
+    else:
+        ok = (macd_hist >= -0.001) if direction == "LONG" else (macd_hist <= 0.001)
+    return RuleResult("MACD 30m", ok, f"MACD_hist={macd_hist:.4f}")
+
+# ===== قانون ورود جدید (مرحله ۲) =====
+def rule_smart_pullback_entry(price_30m, ema21_30m, rsi_30m, open_15m, close_15m, direction) -> RuleResult:
+    if direction == "LONG":
+        pullback_ok = price_30m < ema21_30m * 0.997          # حداقل ۰.۳٪ پولبک
+        rsi_ok = 50 <= rsi_30m <= 60
+        candle_strong = (close_15m - open_15m) / (high_15m - low_15m + 1e-8) >= 0.65
+        ok = pullback_ok and rsi_ok and candle_strong
+        detail = f"قیمت={price_30m:.4f} EMA={ema21_30m:.4f} RSI={rsi_30m:.1f} BS15={candle_strong}"
+    else:
+        pullback_ok = price_30m > ema21_30m * 1.003
+        rsi_ok = 40 <= rsi_30m <= 50
+        candle_strong = (open_15m - close_15m) / (high_15m - low_15m + 1e-8) >= 0.65
+        ok = pullback_ok and rsi_ok and candle_strong
+        detail = f"قیمت={price_30m:.4f} EMA={ema21_30m:.4f} RSI={rsi_30m:.1f} BS15={candle_strong}"
+    
+    return RuleResult("ورود هوشمند پولبک", ok, detail)
+
+# ===== قوانین مومنتوم جدید (مرحله ۳) =====
+def rule_cci_momentum(candles, direction) -> RuleResult:
+    cci = calculate_cci(candles)
+    if cci is None:
+        return RuleResult("CCI مومنتوم", False, "داده موجود نیست")
+    ok = (cci > 0) if direction == "LONG" else (cci < 0)
+    return RuleResult("CCI عبور از ۰", ok, f"CCI={cci:.2f}")
+
+def rule_stochastic_momentum(candles, direction) -> RuleResult:
+    k, d = calculate_stochastic(candles)
+    if k is None or d is None:
+        return RuleResult("Stochastic کراس", False, "داده موجود نیست")
+    if direction == "LONG":
+        ok = (k > d) and (k < 60) and (k > 20)   # کراس صعودی زیر ۶۰
+    else:
+        ok = (k < d) and (k > 40) and (k < 80)   # کراس نزولی بالای ۴۰
+    return RuleResult("Stochastic کراس", ok, f"K={k:.2f} D={d:.2f}")
 
 # ===== قوانین پیشرفته =====
 def rule_adx(candles: list, direction: str) -> RuleResult:
