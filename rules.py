@@ -129,7 +129,7 @@ def rule_stochastic_momentum(candles, direction) -> RuleResult:
         ok = (k < d) and (k > 40) and (k < 80)
     return RuleResult("Stochastic کراس", ok, f"K={k:.2f} D={d:.2f}")
 
-# ===== قوانین مرحله ۱ (بدون تغییر) =====
+# ===== قوانین مرحله ۱ =====
 def rule_adx(candles: list, direction: str) -> RuleResult:
     adx, di_plus, di_minus = calculate_adx(candles)
     if adx is None:
@@ -169,7 +169,7 @@ def rule_double_top_bottom(prices_series_30m: list) -> RuleResult:
     ok = pattern is not None
     return RuleResult("Double Top/Bottom", ok, f"الگو={pattern}" if ok else "بدون الگو")
 
-# ===== ارزیابی قوانین (اصلاح شده) =====
+# ===== نقشه وزن قوانین =====
 RULE_GROUP_MAP = {
     "قدرت کندل 15m": "Candles",
     "قدرت کندل 5m": "Candles",
@@ -177,11 +177,11 @@ RULE_GROUP_MAP = {
     "روند EMA 4h": "TF_Big",
     "RSI 30m": "Confirm",
     "MACD 30m": "Confirm",
-    "ورود هوشمند پولبک": "Confirm",      # ← تغییر نام
+    "ورود هوشمند پولبک": "Confirm",      # مرحله ۲
     "ADX": "ADX",
-    "CCI مومنتوم": "CCI",                # ← تغییر نام
+    "CCI مومنتوم": "CCI",                # مرحله ۳
     "SAR": "SAR",
-    "Stochastic کراس": "Stoch",          # ← تغییر نام
+    "Stochastic کراس": "Stoch",          # مرحله ۳
     "رد EMA": "Patterns",
     "تست مقاومت": "Patterns",
     "پولبک": "Patterns",
@@ -227,7 +227,6 @@ def evaluate_rules(
     total_weight = sum(weights.get(RULE_GROUP_MAP.get(r.name, "Other"), 0) for r in rule_results)
 
     return rule_results, passed_weight, total_weight
-
 
 # ===== تولید سیگنال =====
 async def generate_signal(
@@ -284,16 +283,16 @@ async def generate_signal(
     else:
         atr_mult, rr_target = 1.5, 1.5
 
-    # محاسبه استاپ و تارگت - جدید: استاپ ساختارمحور
+    # محاسبه استاپ و تارگت
     if direction == "LONG":
         swing_low = calculate_swing_low(candles)
-        buffer = 0.001 * price_30m  # buffer کوچک
-        stop_loss = swing_low - buffer
+        buffer = 0.001 * price_30m
+        stop_loss = swing_low - buffer if swing_low is not None else price_30m - atr_val_30m * atr_mult
         take_profit = price_30m + (price_30m - stop_loss) * rr_target
     else:
-        swing_high = calculate_swing_high(candles)  # فرض بر وجود تابع calculate_swing_high
+        swing_high = calculate_swing_high(candles)
         buffer = 0.001 * price_30m
-        stop_loss = swing_high + buffer
+        stop_loss = swing_high + buffer if swing_high is not None else price_30m + atr_val_30m * atr_mult
         take_profit = price_30m - (stop_loss - price_30m) * rr_target
 
     # دسته‌بندی ریسک نهایی
@@ -308,7 +307,7 @@ async def generate_signal(
 
     status = "SIGNAL" if passed_weight >= total_weight * 0.6 else "NO_SIGNAL"
 
-    # 📊 لاگ کامل
+    # لاگ کامل
     passed_list = [str(r) for r in rule_results if r.passed]
     failed_list = [str(r) for r in rule_results if not r.passed]
     total_rules = len(rule_results)
@@ -331,7 +330,7 @@ async def generate_signal(
     logger.info("=" * 80)
 
     signal_dict = {
-"symbol": symbol,
+        "symbol": symbol,
         "direction": direction,
         "risk": final_risk,
         "status": status,
@@ -346,9 +345,7 @@ async def generate_signal(
         "total_weight": total_weight
     }
 
-    # فقط اگر status == "SIGNAL" باشد، ذخیره و ارسال کن
     if status == "SIGNAL":
-        # ذخیره در CSV
         append_signal_row(
             symbol=symbol,
             direction=direction,
@@ -361,7 +358,6 @@ async def generate_signal(
             position_size_usd=10.0
         )
 
-        # ارسال تلگرام
         dir_icon = "🟢" if direction == "LONG" else "🔴"
         risk_icon_map = {
             "LOW": "🛡️ محافظه‌کار",
