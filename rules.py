@@ -48,7 +48,7 @@ async def send_to_telegram(text: str):
         except Exception as e:
             logger.error(f"❌ خطا در ارسال به تلگرام: {e}")
 
-# ===== قوانین پایه =====
+# ===== قوانین پایه (بدون تغییر) =====
 def rule_body_strength(open_15m, close_15m, high_15m, low_15m, risk_rules) -> RuleResult:
     bs = abs(close_15m - open_15m) / max(high_15m - low_15m, 1e-6)
     th = risk_rules.get("candle_15m_strength", 0.5)
@@ -93,24 +93,26 @@ def rule_macd(macd_hist, direction, risk_level) -> RuleResult:
         ok = (macd_hist >= -0.001) if direction == "LONG" else (macd_hist <= 0.001)
     return RuleResult("MACD 30m", ok, f"MACD_hist={macd_hist:.4f}")
 
-# ===== قانون ورود جدید (مرحله ۲) =====
-def rule_smart_pullback_entry(price_30m, ema21_30m, rsi_30m, open_15m, close_15m, direction) -> RuleResult:
+# ===== مرحله ۲: ورود هوشمند پولبک =====
+def rule_smart_pullback_entry(price_30m, ema21_30m, rsi_30m, open_15m, close_15m, high_15m, low_15m, direction) -> RuleResult:
     if direction == "LONG":
         pullback_ok = price_30m < ema21_30m * 0.997          # حداقل ۰.۳٪ پولبک
         rsi_ok = 50 <= rsi_30m <= 60
-        candle_strong = (close_15m - open_15m) / (high_15m - low_15m + 1e-8) >= 0.65
+        bs = abs(close_15m - open_15m) / max(high_15m - low_15m, 1e-8)
+        candle_strong = bs >= 0.65
         ok = pullback_ok and rsi_ok and candle_strong
-        detail = f"قیمت={price_30m:.4f} EMA={ema21_30m:.4f} RSI={rsi_30m:.1f} BS15={candle_strong}"
-    else:
+        detail = f"قیمت={price_30m:.4f} EMA={ema21_30m:.4f} RSI={rsi_30m:.1f} BS15={bs:.3f}"
+    else:  # SHORT
         pullback_ok = price_30m > ema21_30m * 1.003
         rsi_ok = 40 <= rsi_30m <= 50
-        candle_strong = (open_15m - close_15m) / (high_15m - low_15m + 1e-8) >= 0.65
+        bs = abs(open_15m - close_15m) / max(high_15m - low_15m, 1e-8)
+        candle_strong = bs >= 0.65
         ok = pullback_ok and rsi_ok and candle_strong
-        detail = f"قیمت={price_30m:.4f} EMA={ema21_30m:.4f} RSI={rsi_30m:.1f} BS15={candle_strong}"
+        detail = f"قیمت={price_30m:.4f} EMA={ema21_30m:.4f} RSI={rsi_30m:.1f} BS15={bs:.3f}"
     
     return RuleResult("ورود هوشمند پولبک", ok, detail)
 
-# ===== قوانین مومنتوم جدید (مرحله ۳) =====
+# ===== مرحله ۳: مومنتوم جدید =====
 def rule_cci_momentum(candles, direction) -> RuleResult:
     cci = calculate_cci(candles)
     if cci is None:
@@ -123,26 +125,19 @@ def rule_stochastic_momentum(candles, direction) -> RuleResult:
     if k is None or d is None:
         return RuleResult("Stochastic کراس", False, "داده موجود نیست")
     if direction == "LONG":
-        ok = (k > d) and (k < 60) and (k > 20)   # کراس صعودی زیر ۶۰
+        ok = (k > d) and (k < 60) and (k > 20)
     else:
-        ok = (k < d) and (k > 40) and (k < 80)   # کراس نزولی بالای ۴۰
+        ok = (k < d) and (k > 40) and (k < 80)
     return RuleResult("Stochastic کراس", ok, f"K={k:.2f} D={d:.2f}")
 
-# ===== قوانین پیشرفته =====
+# ===== قوانین پیشرفته (مرحله ۱) =====
 def rule_adx(candles: list, direction: str) -> RuleResult:
     adx, di_plus, di_minus = calculate_adx(candles)
     if adx is None:
         return RuleResult("ADX", False, "داده ADX موجود نیست")
-    ok = adx > INDICATOR_THRESHOLDS["ADX_STRONG"]
-    detail = f"ADX={adx:.2f} [حد > {INDICATOR_THRESHOLDS['ADX_STRONG']}]"
+    ok = adx > 25 and (di_plus > di_minus if direction == "LONG" else di_minus > di_plus)
+    detail = f"ADX={adx:.2f} [>25], DI+={di_plus:.2f}, DI-={di_minus:.2f}"
     return RuleResult("ADX", ok, detail)
-
-def rule_cci(candles: list, direction: str) -> RuleResult:
-    cci = calculate_cci(candles)
-    if cci is None:
-        return RuleResult("CCI", False, "داده CCI موجود نیست")
-    ok = (cci > INDICATOR_THRESHOLDS["CCI_OVERBOUGHT"]) if direction == "LONG" else (cci < INDICATOR_THRESHOLDS["CCI_OVERSOLD"])
-    return RuleResult("CCI", ok, f"CCI={cci:.2f}")
 
 def rule_sar(candles: list, direction: str) -> RuleResult:
     sar = calculate_sar(candles)
@@ -152,14 +147,12 @@ def rule_sar(candles: list, direction: str) -> RuleResult:
     ok = (last_close > sar) if direction == "LONG" else (last_close < sar)
     return RuleResult("SAR", ok, f"SAR={sar:.4f}, قیمت={last_close:.4f}")
 
-def rule_stochastic(candles: list, direction: str) -> RuleResult:
-    k, d = calculate_stochastic(candles)
-    if k is None:
-        return RuleResult("Stochastic", False, "داده Stochastic موجود نیست")
-    ok = (k > INDICATOR_THRESHOLDS["STOCH_OVERBOUGHT"] and k > d) if direction == "LONG" else (k < INDICATOR_THRESHOLDS["STOCH_OVERSOLD"] and k < d)
-    return RuleResult("Stochastic", ok, f"K={k:.2f}, D={d:.2f}")
+def rule_range_filter(ema21_30m: float, ema50_30m: float, price_30m: float) -> RuleResult:
+    diff = abs(ema21_30m - ema50_30m) / price_30m if price_30m > 0 else 0
+    ok = diff > 0.007
+    return RuleResult("فیلتر رنج", ok, f"فاصله EMA={diff:.4f} [>0.007]")
 
-# ===== قوانین الگو =====
+# ===== قوانین الگو (بدون تغییر) =====
 def rule_ema_rejection(prices_series_30m: list, ema21_30m: float) -> RuleResult:
     rejected = ema_rejection(prices_series_30m, ema21_30m)
     return RuleResult("رد EMA", rejected, "رد EMA تشخیص داده شد" if rejected else "بدون رد")
@@ -176,12 +169,6 @@ def rule_double_top_bottom(prices_series_30m: list) -> RuleResult:
     pattern = double_top_bottom(prices_series_30m)
     ok = pattern is not None
     return RuleResult("Double Top/Bottom", ok, f"الگو={pattern}" if ok else "بدون الگو")
-
-# ===== فیلتر رنج جدید =====
-def rule_range_filter(ema21_30m: float, ema50_30m: float, price_30m: float) -> RuleResult:
-    diff = abs(ema21_30m - ema50_30m) / price_30m if price_30m > 0 else 0
-    ok = diff > 0.007
-    return RuleResult("فیلتر رنج", ok, f"فاصله EMA={diff:.4f} [حد > 0.007]")
 
 # ===== ارزیابی قوانین =====
 # نقشه گروه‌بندی قوانین به وزن‌ها
@@ -234,9 +221,9 @@ def evaluate_rules(
         rule_macd(macd_hist_30m, direction, risk_rules, risk),
         rule_entry_break(price_30m, ema21_30m, direction, risk_rules, risk),
         rule_adx(candles, direction),
-        rule_cci(candles, direction),
+        rule_cci_momentum(candles, direction),          # ← مرحله ۳
         rule_sar(candles, direction),
-        rule_stochastic(candles, direction),
+        rule_stochastic_momentum(candles, direction),   # ← مرحله ۳
         rule_ema_rejection(prices_series_30m, ema21_30m),
         rule_resistance_test(prices_series_30m, ema50_30m),
         rule_pullback(prices_series_30m, direction),
