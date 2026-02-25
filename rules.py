@@ -2,13 +2,12 @@ import logging
 import aiohttp
 import asyncio
 from dataclasses import dataclass
-from typing import List, Tuple, Optional
+from typing import List
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from config import (
     RISK_LEVELS, RISK_PARAMS, RISK_FACTORS,
-    INDICATOR_THRESHOLDS, ADVANCED_RISK_PARAMS,
     TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 )
 from indicators import (
@@ -48,7 +47,7 @@ async def send_to_telegram(text: str):
         except Exception as e:
             logger.error(f"❌ خطا در ارسال به تلگرام: {e}")
 
-# ===== SAFE Trend Pullback Engine V3 + لاگ کامل =====
+# ===== SAFE V3 + لاگ کامل مثل قبل =====
 async def generate_signal(
     symbol: str,
     direction: str,
@@ -87,93 +86,104 @@ async def generate_signal(
     rule_results.append(RuleResult("فیلتر رنج", range_ok, f"فاصله EMA={ema_distance:.4f} [>0.0085]"))
 
     mandatory_passed = trend_1h_ok and trend_4h_ok and adx_ok and range_ok
-    if not mandatory_passed:
-        status = "NO_SIGNAL"
-        reason = "Mandatory conditions failed"
+
+    # 2️⃣ Pullback Entry
+    if direction == "LONG":
+        pullback_ok = abs(price_30m - ema21_30m) / ema21_30m < 0.0025
+        rsi_ok = 52 <= rsi_30m <= 63
     else:
-        # 2️⃣ Pullback Entry
+        pullback_ok = abs(price_30m - ema21_30m) / ema21_30m < 0.0025
+        rsi_ok = 37 <= rsi_30m <= 48
+
+    last = candles_30m[-1]
+    body = abs(last['c'] - last['o'])
+    full = last['h'] - last['l']
+    candle_strong = body / full >= 0.60
+
+    rule_results.append(RuleResult("ورود هوشمند پولبک", pullback_ok and rsi_ok and candle_strong,
+                                   f"قیمت={price_30m:.4f} EMA={ema21_30m:.4f} RSI={rsi_30m:.1f} BS15={body/full:.3f}"))
+
+    entry_ok = pullback_ok and rsi_ok and candle_strong
+
+    if not (mandatory_passed and entry_ok):
+        status = "NO_SIGNAL"
+        reason = "Mandatory conditions failed" if not mandatory_passed else "Pullback conditions failed"
+    else:
+        # 3️⃣ Stop & TP
         if direction == "LONG":
-            pullback_ok = abs(price_30m - ema21_30m) / ema21_30m < 0.0025
-            rsi_ok = 52 <= rsi_30m <= 63
+            swing_low = min(c['l'] for c in candles_30m[-8:])
+            stop_loss = swing_low * (1 - buffer)
         else:
-            pullback_ok = abs(price_30m - ema21_30m) / ema21_30m < 0.0025
-            rsi_ok = 37 <= rsi_30m <= 48
+            swing_high = max(c['h'] for c in candles_30m[-8:])
+            stop_loss = swing_high * (1 + buffer)
 
-        last = candles_30m[-1]
-        body = abs(last['c'] - last['o'])
-        full = last['h'] - last['l']
-        candle_strong = body / full >= 0.60
+        risk = abs(price_30m - stop_loss)
+        take_profit = price_30m + risk * 2.3 if direction == "LONG" else price_30m - risk * 2.3
 
-        rule_results.append(RuleResult("ورود هوشمند پولبک", pullback_ok and rsi_ok and candle_strong,
-                                       f"قیمت={price_30m:.4f} EMA={ema21_30m:.4f} RSI={rsi_30m:.1f} BS15={body/full:.3f}"))
+        status = "SIGNAL"
+        reason = "SAFE_PULLBACK_V3"
 
-        entry_ok = pullback_ok and rsi_ok and candle_strong
-        if not entry_ok:
-            status = "NO_SIGNAL"
-            reason = "Pullback conditions failed"
-        else:
-            # 3️⃣ Stop & TP
-            if direction == "LONG":
-                swing_low = min(c['l'] for c in candles_30m[-8:])
-                stop_loss = swing_low * (1 - buffer)
-            else:
-                swing_high = max(c['h'] for c in candles_30m[-8:])
-                stop_loss = swing_high * (1 + buffer)
+        signal_dict = {
+            "symbol": symbol,
+            "direction": direction,
+            "risk": "MEDIUM",
+            "status": "SIGNAL",
+            "strength": 0.75,
+            "price": price_30m,
+            "stop_loss": round(stop_loss, 6),
+            "take_profit": round(take_profit, 6),
+            "time": tehran_time_str(),
+            "signal_source": "SAFE_PULLBACK_V3",
+            "details": [str(r) for r in rule_results]
+        }
 
-            risk = abs(price_30m - stop_loss)
-            take_profit = price_30m + risk * 2.3 if direction == "LONG" else price_30m - risk * 2.3
+        append_signal_row(
+            symbol=symbol, direction=direction, risk_level_name="MEDIUM",
+            entry_price=price_30m, stop_loss=stop_loss, take_profit=take_profit,
+            issued_at_tehran=signal_dict["time"], signal_source="SAFE_PULLBACK_V3",
+            position_size_usd=10.0
+        )
 
-            status = "SIGNAL"
-            reason = "SAFE_PULLBACK_V3"
+        msg = f"🟢 SAFE V3\n{symbol} {direction}\nورود: {price_30m:.4f}\nاستاپ: {stop_loss:.4f}\nتارگت: {take_profit:.4f}\nRR: 2.3"
+        await send_to_telegram(msg)
 
-            signal_dict = {
-                "symbol": symbol,
-                "direction": direction,
-                "risk": "MEDIUM",
-                "status": "SIGNAL",
-                "strength": 0.75,
-                "price": price_30m,
-                "stop_loss": round(stop_loss, 6),
-                "take_profit": round(take_profit, 6),
-                "time": tehran_time_str(),
-                "signal_source": "SAFE_PULLBACK_V3",
-                "details": [str(r) for r in rule_results]
-            }
+        # ====================== لاگ کامل مثل قبل ======================
+        passed_list = [str(r) for r in rule_results if r.passed]
+        failed_list = [str(r) for r in rule_results if not r.passed]
 
-            append_signal_row(
-                symbol=symbol, direction=direction, risk_level_name="MEDIUM",
-                entry_price=price_30m, stop_loss=stop_loss, take_profit=take_profit,
-                issued_at_tehran=signal_dict["time"], signal_source="SAFE_PULLBACK_V3",
-                position_size_usd=10.0
-            )
+        logger.info("=" * 80)
+        logger.info(f"📊 سیگنال {symbol} | جهت={direction} | ریسک=MEDIUM")
+        logger.info(f"📈 قوانین پاس‌شده: وزن=0.75")
+        logger.info(f"📊 تعداد قوانین: پاس={len(passed_list)}, رد={len(failed_list)}, کل={len(rule_results)}")
+        logger.info("📋 همه قوانین بررسی‌شده:")
+        logger.info("\n".join([str(r) for r in rule_results]))
+        logger.info("—" * 60)
+        logger.info("✅ قوانین پاس‌شده:")
+        logger.info("\n".join(passed_list) if passed_list else "هیچ‌کدام")
+        logger.info("❌ قوانین ردشده:")
+        logger.info("\n".join(failed_list) if failed_list else "هیچ‌کدام")
+        logger.info(f"✅ وضعیت نهایی: SIGNAL")
+        logger.info(f"🎯 استاپ: {stop_loss:.4f} | تارگت: {take_profit:.4f}")
+        logger.info("=" * 80)
 
-            msg = f"🟢 SAFE V3\n{symbol} {direction}\nورود: {price_30m:.4f}\nاستاپ: {stop_loss:.4f}\nتارگت: {take_profit:.4f}\nRR: 2.3"
-            await send_to_telegram(msg)
-
-            # لاگ کامل مثل قبل
-            passed_list = [str(r) for r in rule_results if r.passed]
-            failed_list = [str(r) for r in rule_results if not r.passed]
-
-            logger.info("=" * 80)
-            logger.info(f"📊 سیگنال {symbol} | جهت={direction} | ریسک=MEDIUM")
-            logger.info(f"📈 قوانین پاس‌شده: وزن=0.75")
-            logger.info(f"📊 تعداد قوانین: پاس={len(passed_list)}, رد={len(failed_list)}, کل={len(rule_results)}")
-            logger.info("📋 همه قوانین بررسی‌شده:")
-            logger.info("\n".join([str(r) for r in rule_results]))
-            logger.info("—" * 60)
-            logger.info("✅ قوانین پاس‌شده:")
-            logger.info("\n".join(passed_list) if passed_list else "هیچ‌کدام")
-            logger.info("❌ قوانین ردشده:")
-            logger.info("\n".join(failed_list) if failed_list else "هیچ‌کدام")
-            logger.info(f"✅ وضعیت نهایی: SIGNAL")
-            logger.info(f"🎯 استاپ: {stop_loss:.4f} | تارگت: {take_profit:.4f}")
-            logger.info("=" * 80)
-
-            return signal_dict
+        return signal_dict
 
     # NO_SIGNAL
+    passed_list = [str(r) for r in rule_results if r.passed]
+    failed_list = [str(r) for r in rule_results if not r.passed]
+
     logger.info("=" * 80)
-    logger.info(f"📊 سیگنال {symbol} | جهت={direction} | وضعیت=NO_SIGNAL")
+    logger.info(f"📊 سیگنال {symbol} | جهت={direction} | ریسک=MEDIUM")
+    logger.info(f"📈 قوانین پاس‌شده: وزن=0")
+    logger.info(f"📊 تعداد قوانین: پاس={len(passed_list)}, رد={len(failed_list)}, کل={len(rule_results)}")
+    logger.info("📋 همه قوانین بررسی‌شده:")
+    logger.info("\n".join([str(r) for r in rule_results]))
+    logger.info("—" * 60)
+    logger.info("✅ قوانین پاس‌شده:")
+    logger.info("\n".join(passed_list) if passed_list else "هیچ‌کدام")
+    logger.info("❌ قوانین ردشده:")
+    logger.info("\n".join(failed_list) if failed_list else "هیچ‌کدام")
+    logger.info(f"✅ وضعیت نهایی: NO_SIGNAL")
     logger.info(f"دلیل: {reason}")
     logger.info("=" * 80)
 
