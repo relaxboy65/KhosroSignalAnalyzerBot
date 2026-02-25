@@ -1,4 +1,4 @@
-# bot.py - نسخه نهایی با SAFE V3 + لاگ کامل مثل قبل
+# bot.py - نسخه نهایی با لاگ کامل
 
 import aiohttp
 import asyncio
@@ -33,7 +33,6 @@ intervals = {
     "4h": "4hour"
 }
 
-# ========== دریافت داده ==========
 async def fetch_timeframe(session, symbol, tf, days):
     api_tf = intervals[tf]
     end_time = int(datetime.utcnow().timestamp())
@@ -63,17 +62,14 @@ async def fetch_all_timeframes(session, symbol):
     results = await asyncio.gather(*tasks)
     return {tf: candles for tf, candles in results if candles}
 
-# ========== پردازش نماد + لاگ کامل مثل قبل ==========
 async def process_symbol(symbol, data, index, total):
     if not data or "30m" not in data or len(data["30m"]) < 20:
         logger.info(f"[{index}/{total}] {symbol} — ❌ داده کافی نیست")
         return
 
-    # محاسبات اندیکاتورها
     closes_30 = [c['c'] for c in data["30m"]]
     ema21_30m = calculate_ema(closes_30, 21)
     ema50_30m = calculate_ema(closes_30, 50)
-    ema8_30m = calculate_ema(closes_30, 8)
 
     candle_15m = data.get("15m", [{}])[-1]
     candle_5m = data.get("5m", [{}])[-1]
@@ -95,7 +91,6 @@ async def process_symbol(symbol, data, index, total):
 
     price_30m = closes_30[-1]
 
-    # ==================== صدا زدن SAFE V3 ====================
     signal = await generate_signal(
         symbol=symbol,
         direction="LONG" if ema21_30m and ema50_30m and ema21_30m > ema50_30m else "SHORT",
@@ -112,26 +107,6 @@ async def process_symbol(symbol, data, index, total):
         candles_30m=data["30m"],
         atr_30m=atr_30m
     )
-
-    # لاگ کامل مثل قبل (حتی اگر NO_SIGNAL باشد)
-    logger.info("=" * 80)
-    logger.info(f"📊 سیگنال {symbol} | جهت={signal.get('direction', 'UNKNOWN')} | وضعیت={signal.get('status')}")
-    
-    if signal.get("status") == "SIGNAL":
-        logger.info(f"✅ سیگنال قوی صادر شد | ورود={signal['price']:.4f} | استاپ={signal['stop_loss']:.4f} | تارگت={signal['take_profit']:.4f} | RR={signal.get('rr', 2.3)}")
-        logger.info(f"📈 مدل: {signal.get('reason', 'SAFE_PULLBACK_V3')}")
-    else:
-        logger.info(f"📭 بدون سیگنال — دلیل: {signal.get('reason', 'نامشخص')}")
-
-    logger.info("=" * 80)
-
-# ========== تابع اصلی ==========
-async def main_async():
-    async with aiohttp.ClientSession() as session:
-        tasks = [fetch_all_timeframes(session, sym) for sym in SYMBOLS]
-        results = await asyncio.gather(*tasks)
-        for idx, data in enumerate(results, 1):
-            await process_symbol(SYMBOLS[idx-1], data, idx, len(SYMBOLS))
 
 if __name__ == "__main__":
     asyncio.run(main_async())
