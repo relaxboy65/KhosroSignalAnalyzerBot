@@ -1,4 +1,4 @@
-# bot.py - نسخه نهایی با لاگ کامل
+# bot.py - نسخه نهایی با SAFE V3 + لاگ کامل مثل قبل
 
 import aiohttp
 import asyncio
@@ -33,6 +33,7 @@ intervals = {
     "4h": "4hour"
 }
 
+# ========== دریافت داده ==========
 async def fetch_timeframe(session, symbol, tf, days):
     api_tf = intervals[tf]
     end_time = int(datetime.utcnow().timestamp())
@@ -62,6 +63,7 @@ async def fetch_all_timeframes(session, symbol):
     results = await asyncio.gather(*tasks)
     return {tf: candles for tf, candles in results if candles}
 
+# ========== پردازش نماد ==========
 async def process_symbol(symbol, data, index, total):
     if not data or "30m" not in data or len(data["30m"]) < 20:
         logger.info(f"[{index}/{total}] {symbol} — ❌ داده کافی نیست")
@@ -91,6 +93,7 @@ async def process_symbol(symbol, data, index, total):
 
     price_30m = closes_30[-1]
 
+    # صدا زدن SAFE V3
     signal = await generate_signal(
         symbol=symbol,
         direction="LONG" if ema21_30m and ema50_30m and ema21_30m > ema50_30m else "SHORT",
@@ -107,6 +110,14 @@ async def process_symbol(symbol, data, index, total):
         candles_30m=data["30m"],
         atr_30m=atr_30m
     )
+
+# ========== تابع اصلی ==========
+async def main_async():
+    async with aiohttp.ClientSession() as session:
+        tasks = [fetch_all_timeframes(session, sym) for sym in SYMBOLS]
+        results = await asyncio.gather(*tasks)
+        for idx, data in enumerate(results, 1):
+            await process_symbol(SYMBOLS[idx-1], data, idx, len(SYMBOLS))
 
 if __name__ == "__main__":
     asyncio.run(main_async())
