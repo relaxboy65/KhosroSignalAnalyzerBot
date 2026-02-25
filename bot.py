@@ -1,4 +1,4 @@
-# bot.py - با تغییرات برای EMA50
+# bot.py - نسخه نهایی با SAFE Trend Pullback Engine V3
 
 import aiohttp
 import asyncio
@@ -8,8 +8,8 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from config import SYMBOLS
-from indicators import calculate_rsi, calculate_ema, calculate_macd, calculate_atr
-from rules import generate_signal
+from indicators import calculate_rsi, calculate_ema, calculate_macd, calculate_atr, calculate_adx
+from rules import generate_signal   # تابع جدید V3
 
 # ========== تنظیمات لاگ ==========
 logging.basicConfig(
@@ -66,28 +66,22 @@ async def fetch_all_timeframes(session, symbol):
 
 # ========== پردازش یک نماد ==========
 async def process_symbol(symbol, data, index, total):
-    if not data or "30m" not in data:
+    if not data or "30m" not in data or len(data["30m"]) < 20:
         logger.info(f"[{index}/{total}] {symbol} — ❌ داده کافی نیست")
         return
 
+    # محاسبه EMAها
     closes_30 = [c['c'] for c in data["30m"]]
     ema21_30m = calculate_ema(closes_30, 21)
-    ema50_30m = calculate_ema(closes_30, 50)  # تغییر به 50
+    ema50_30m = calculate_ema(closes_30, 50)
     ema8_30m = calculate_ema(closes_30, 8)
 
-    candle_1m = data.get("1m", [{}])[-1]
-    open_1m = candle_1m.get("o")
-    close_1m = candle_1m.get("c")
-    high_1m = candle_1m.get("h")
-    low_1m = candle_1m.get("l")
-
+    # کندل‌های آخر
+    candle_15m = data.get("15m", [{}])[-1]
     candle_5m = data.get("5m", [{}])[-1]
-    open_5m = candle_5m.get("o")
-    close_5m = candle_5m.get("c")
-    high_5m = candle_5m.get("h")
-    low_5m = candle_5m.get("l")
+    candle_1m = data.get("1m", [{}])[-1]
 
-    # EMAهای 1h و 4h - تغییر به EMA50
+    # EMAهای تایم‌فریم بالاتر
     closes_1h = [c['c'] for c in data.get("1h", [])]
     ema21_1h = calculate_ema(closes_1h, 21) if closes_1h else None
     ema50_1h = calculate_ema(closes_1h, 50) if closes_1h else None
@@ -97,44 +91,38 @@ async def process_symbol(symbol, data, index, total):
     ema50_4h = calculate_ema(closes_4h, 50) if closes_4h else None
     ema200_4h = calculate_ema(closes_4h, 200) if closes_4h else None
 
-    # محاسبه اندیکاتورهای مشترک
+    # اندیکاتورهای مشترک
     macd_30m = calculate_macd(closes_30)
     rsi_30m = calculate_rsi(closes_30)
-    atr_30m = calculate_atr(data["30m"]) if "30m" in data else None
+    atr_30m = calculate_atr(data["30m"]) if "30m" in data else 0.0
 
     price_30m = closes_30[-1]
 
-    # صدا زدن generate_signal (فرض بر روش فعلی - اگر جدید می‌خواهید تغییر بدید)
+    # محاسبه ADX + DI برای V3
+    adx_val, di_plus, di_minus = calculate_adx(data["30m"]) if data.get("30m") else (0, 0, 0)
+
+    # ==================== صدا زدن SAFE V3 ====================
     signal = await generate_signal(
         symbol=symbol,
-        direction="LONG" if ema21_30m > ema50_30m else "SHORT",
-        prefer_risk="MEDIUM",
+        direction="LONG" if ema21_30m and ema50_30m and ema21_30m > ema50_30m else "SHORT",
         price_30m=price_30m,
-        open_15m=data.get("15m", [{}])[-1].get("o", price_30m),
-        close_15m=data.get("15m", [{}])[-1].get("c", price_30m),
-        high_15m=data.get("15m", [{}])[-1].get("h", price_30m),
-        low_15m=data.get("15m", [{}])[-1].get("l", price_30m),
-        open_5m=open_5m, close_5m=close_5m, high_5m=high_5m, low_5m=low_5m,
-        open_1m=open_1m, close_1m=close_1m, high_1m=high_1m, low_1m=low_1m,
-        ema21_30m=ema21_30m, ema50_30m=ema50_30m, ema8_30m=ema8_30m,
-        ema21_1h=ema21_1h, ema50_1h=ema50_1h,
-        ema21_4h=ema21_4h, ema50_4h=ema50_4h, ema200_4h=ema200_4h,
-        macd_line_30m=macd_30m.get("macd") if macd_30m else None,
-        hist_30m=macd_30m.get("histogram") if macd_30m else None,
+        ema21_1h=ema21_1h,
+        ema50_1h=ema50_1h,
+        ema21_4h=ema21_4h,
+        ema50_4h=ema50_4h,
+        adx=adx_val,
+        di_plus=di_plus,
+        di_minus=di_minus,
+        ema21_30m=ema21_30m,
         rsi_30m=rsi_30m,
-        atr_val_30m=atr_30m or 0.0,
-        curr_vol=data["30m"][-1].get("v", 0.0),
-        avg_vol_30m=0.0,
-        divergence_detected=False,
-        candles=data["30m"],
-        prices_series_30m=closes_30[-120:],
-        closes_by_tf=data
+        candles_30m=data["30m"],
+        atr_30m=atr_30m
     )
 
     if signal and signal.get("status") == "SIGNAL":
-        logger.info(f"✅ سیگنال {symbol}: {signal['direction']} | قیمت={signal['price']:.4f}")
+        logger.info(f"✅ سیگنال قوی {symbol}: {signal['direction']} | ورود={signal['price']:.4f} | استاپ={signal['stop_loss']:.4f} | تارگت={signal['take_profit']:.4f}")
     else:
-        logger.info(f"📭 بدون سیگنال معتبر برای {symbol}")
+        logger.info(f"📭 بدون سیگنال معتبر برای {symbol} — دلیل: {signal.get('reason', 'نامشخص')}")
 
 # ========== تابع اصلی ==========
 async def main_async():
