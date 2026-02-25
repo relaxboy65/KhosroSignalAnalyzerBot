@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 
 from config import (
     RISK_LEVELS, RISK_PARAMS, RISK_FACTORS,
+    INDICATOR_THRESHOLDS, ADVANCED_RISK_PARAMS,
     TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 )
 from indicators import (
@@ -95,17 +96,17 @@ def rule_macd(macd_hist, direction, risk_level) -> RuleResult:
 # ===== مرحله ۲: ورود هوشمند پولبک =====
 def rule_smart_pullback_entry(price_30m, ema21_30m, rsi_30m, open_15m, close_15m, high_15m, low_15m, direction) -> RuleResult:
     if direction == "LONG":
-        pullback_ok = abs(price_30m - ema21_30m) / ema21_30m < 0.0025
-        rsi_ok = 52 <= rsi_30m <= 63
+        pullback_ok = price_30m < ema21_30m * 0.997
+        rsi_ok = 50 <= rsi_30m <= 60
         bs = abs(close_15m - open_15m) / max(high_15m - low_15m, 1e-8)
-        candle_strong = bs >= 0.60
+        candle_strong = bs >= 0.65
         ok = pullback_ok and rsi_ok and candle_strong
         detail = f"قیمت={price_30m:.4f} EMA={ema21_30m:.4f} RSI={rsi_30m:.1f} BS15={bs:.3f}"
     else:
-        pullback_ok = abs(price_30m - ema21_30m) / ema21_30m < 0.0025
-        rsi_ok = 37 <= rsi_30m <= 48
+        pullback_ok = price_30m > ema21_30m * 1.003
+        rsi_ok = 40 <= rsi_30m <= 50
         bs = abs(open_15m - close_15m) / max(high_15m - low_15m, 1e-8)
-        candle_strong = bs >= 0.60
+        candle_strong = bs >= 0.65
         ok = pullback_ok and rsi_ok and candle_strong
         detail = f"قیمت={price_30m:.4f} EMA={ema21_30m:.4f} RSI={rsi_30m:.1f} BS15={bs:.3f}"
     return RuleResult("ورود هوشمند پولبک", ok, detail)
@@ -114,7 +115,7 @@ def rule_smart_pullback_entry(price_30m, ema21_30m, rsi_30m, open_15m, close_15m
 def rule_cci_momentum(candles, direction) -> RuleResult:
     cci = calculate_cci(candles)
     if cci is None:
-        return RuleResult("CCI عبور از ۰", False, "داده موجود نیست")
+        return RuleResult("CCI مومنتوم", False, "داده موجود نیست")
     ok = (cci > 0) if direction == "LONG" else (cci < 0)
     return RuleResult("CCI عبور از ۰", ok, f"CCI={cci:.2f}")
 
@@ -178,7 +179,7 @@ RULE_GROUP_MAP = {
     "MACD 30m": "Confirm",
     "ورود هوشمند پولبک": "Confirm",
     "ADX": "ADX",
-    "CCI عبور از ۰": "CCI",
+    "CCI مومنتوم": "CCI",
     "SAR": "SAR",
     "Stochastic کراس": "Stoch",
     "رد EMA": "Patterns",
@@ -227,7 +228,7 @@ def evaluate_rules(
 
     return rule_results, passed_weight, total_weight
 
-# ===== تولید سیگنال (با لاگ کامل مثل قبل) =====
+# ===== تولید سیگنال =====
 async def generate_signal(
     symbol: str,
     direction: str,
@@ -248,7 +249,7 @@ async def generate_signal(
     candles: list,
     prices_series_30m: list,
     closes_by_tf: dict
-) -> dict:
+) -> Optional[dict]:
     time_str = tehran_time_str()
 
     risk_rules = next((r["rules"] for r in RISK_LEVELS if r["key"] == prefer_risk), RISK_LEVELS[1]["rules"])
@@ -273,7 +274,6 @@ async def generate_signal(
         closes_by_tf=closes_by_tf
     )
 
-    # مدیریت ریسک پویا
     strength_ratio = passed_weight / total_weight if total_weight > 0 else 0
     if strength_ratio >= 0.7:
         atr_mult, rr_target = 1.0, 2.5
@@ -282,19 +282,17 @@ async def generate_signal(
     else:
         atr_mult, rr_target = 1.5, 1.5
 
-    # استاپ و تارگت
     if direction == "LONG":
         swing_low = calculate_swing_low(candles)
-        buffer = 0.0012 * price_30m
+        buffer = 0.001 * price_30m
         stop_loss = swing_low - buffer if swing_low is not None else price_30m - atr_val_30m * atr_mult
         take_profit = price_30m + (price_30m - stop_loss) * rr_target
     else:
         swing_high = calculate_swing_high(candles)
-        buffer = 0.0012 * price_30m
+        buffer = 0.001 * price_30m
         stop_loss = swing_high + buffer if swing_high is not None else price_30m + atr_val_30m * atr_mult
         take_profit = price_30m - (stop_loss - price_30m) * rr_target
 
-    # دسته‌بندی ریسک نهایی
     core_rules = ["روند EMA 1h", "روند EMA 4h", "ADX", "RSI 30m"]
     core_passed = all(any(r.name == cr and r.passed for r in rule_results) for cr in core_rules)
     if core_passed:
@@ -306,7 +304,6 @@ async def generate_signal(
 
     status = "SIGNAL" if passed_weight >= total_weight * 0.6 else "NO_SIGNAL"
 
-    # ====================== لاگ کامل مثل قبل ======================
     passed_list = [str(r) for r in rule_results if r.passed]
     failed_list = [str(r) for r in rule_results if not r.passed]
     total_rules = len(rule_results)
