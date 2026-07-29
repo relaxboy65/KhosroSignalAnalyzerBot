@@ -1,4 +1,4 @@
-# bot.py - با تغییرات برای EMA50
+# bot.py - با تغییرات برای EMA50 و افزایش تعداد کندل‌ها
 
 import aiohttp
 import asyncio
@@ -40,7 +40,7 @@ async def fetch_timeframe(session, symbol, tf, days):
     start_time = end_time - days * 24 * 3600
     params = {"symbol": symbol, "type": api_tf, "startAt": start_time, "endAt": end_time}
     try:
-        async with session.get(KUCOIN_URL, params=params, timeout=20) as resp:
+        async with session.get(KUCOIN_URL, params=params, timeout=30) as resp:
             if resp.status == 200:
                 data = await resp.json()
                 candles_raw = data.get("data", [])
@@ -59,7 +59,15 @@ async def fetch_timeframe(session, symbol, tf, days):
 
 # ========== دریافت همه تایم‌فریم‌ها ==========
 async def fetch_all_timeframes(session, symbol):
-    settings = {"1m": 2, "5m": 7, "15m": 7, "30m": 14, "1h": 30, "4h": 60}
+    # ✅ تنظیم جدید - کاهش تعداد کندل‌ها برای سیگنال‌دهی سریع‌تر
+    settings = {
+        "1m": 1,     # کاهش از 2 به 1 روز (1440 کندل کافی برای EMA50)
+        "5m": 3,     # کاهش از 7 به 3 روز (864 کندل)
+        "15m": 5,    # کاهش از 7 به 5 روز (480 کندل)
+        "30m": 7,    # کاهش از 14 به 7 روز (336 کندل)
+        "1h": 14,    # کاهش از 30 به 14 روز (336 کندل)
+        "4h": 30     # کاهش از 60 به 30 روز (180 کندل)
+    }
     tasks = [fetch_timeframe(session, symbol, tf, days) for tf, days in settings.items()]
     results = await asyncio.gather(*tasks)
     return {tf: candles for tf, candles in results if candles}
@@ -72,7 +80,7 @@ async def process_symbol(symbol, data, index, total):
 
     closes_30 = [c['c'] for c in data["30m"]]
     ema21_30m = calculate_ema(closes_30, 21)
-    ema50_30m = calculate_ema(closes_30, 50)  # تغییر به 50
+    ema50_30m = calculate_ema(closes_30, 50)  # ✅ EMA50
     ema8_30m = calculate_ema(closes_30, 8)
 
     candle_1m = data.get("1m", [{}])[-1]
@@ -87,7 +95,7 @@ async def process_symbol(symbol, data, index, total):
     high_5m = candle_5m.get("h")
     low_5m = candle_5m.get("l")
 
-    # EMAهای 1h و 4h - تغییر به EMA50
+    # EMAهای 1h و 4h - ✅ EMA50
     closes_1h = [c['c'] for c in data.get("1h", [])]
     ema21_1h = calculate_ema(closes_1h, 21) if closes_1h else None
     ema50_1h = calculate_ema(closes_1h, 50) if closes_1h else None
@@ -104,7 +112,7 @@ async def process_symbol(symbol, data, index, total):
 
     price_30m = closes_30[-1]
 
-    # صدا زدن generate_signal (فرض بر روش فعلی - اگر جدید می‌خواهید تغییر بدید)
+    # ✅ صدا زدن generate_signal با await
     signal = await generate_signal(
         symbol=symbol,
         direction="LONG" if ema21_30m > ema50_30m else "SHORT",
