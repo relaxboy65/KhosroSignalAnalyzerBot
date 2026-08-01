@@ -52,14 +52,28 @@ async def send_to_telegram(text: str):
 def rule_body_strength(open_15m, close_15m, high_15m, low_15m, risk_rules) -> RuleResult:
     bs = abs(close_15m - open_15m) / max(high_15m - low_15m, 1e-6)
     th = risk_rules.get("candle_15m_strength", 0.5)
-    ok = bs >= th
-    return RuleResult("قدرت کندل 15m", ok, f"BS15={bs:.3f} [≥ {th}]")
+    
+    # ✅ اگر قدرت کندل خیلی بالا بود، احتمال پایان حرکت
+    if bs > 0.9:
+        ok = False  # رد کردن سیگنال‌های با قدرت خیلی بالا
+        detail = f"BS15={bs:.3f} [خیلی بالا - احتمال پایان حرکت]"
+    else:
+        ok = bs >= th
+        detail = f"BS15={bs:.3f} [≥ {th}]"
+    return RuleResult("قدرت کندل 15m", ok, detail)
 
 def rule_body_strength_5m(open_5m, close_5m, high_5m, low_5m, risk_rules) -> RuleResult:
     bs = abs(close_5m - open_5m) / max(high_5m - low_5m, 1e-6)
     th = risk_rules.get("candle_5m_strength", 0.5)
-    ok = bs >= th
-    return RuleResult("قدرت کندل 5m", ok, f"BS5={bs:.3f} [≥ {th}]")
+    
+    # ✅ اگر قدرت کندل خیلی بالا بود، احتمال پایان حرکت
+    if bs > 0.9:
+        ok = False  # رد کردن سیگنال‌های با قدرت خیلی بالا
+        detail = f"BS5={bs:.3f} [خیلی بالا - احتمال پایان حرکت]"
+    else:
+        ok = bs >= th
+        detail = f"BS5={bs:.3f} [≥ {th}]"
+    return RuleResult("قدرت کندل 5m", ok, detail)
 
 def rule_trend_1h(ema21_1h, ema50_1h, direction) -> RuleResult:
     if ema21_1h is None or ema50_1h is None:
@@ -68,7 +82,6 @@ def rule_trend_1h(ema21_1h, ema50_1h, direction) -> RuleResult:
     return RuleResult("روند EMA 1h", ok, f"EMA21={ema21_1h:.2f}, EMA50={ema50_1h:.2f}")
 
 def rule_trend_4h(ema21_4h, ema50_4h, ema200_4h, direction) -> RuleResult:
-    # ✅ بررسی کامل None بودن مقادیر
     if ema21_4h is None or ema50_4h is None or ema200_4h is None:
         return RuleResult("روند EMA 4h", False, "داده موجود نیست")
     
@@ -83,20 +96,30 @@ def rule_rsi(rsi_30m, direction, risk_level) -> RuleResult:
         return RuleResult("RSI 30m", False, "داده موجود نیست")
     
     if direction == "LONG":
-        if risk_level == "LOW":
+        # ✅ اضافه کردن شرط اشباع نبودن
+        if rsi_30m > 75:
+            ok = False
+            detail = f"RSI={rsi_30m:.2f} [اشباع خرید - ریسک برگشت]"
+        elif risk_level == "LOW":
             ok = 50 <= rsi_30m <= 65
         elif risk_level == "MEDIUM":
             ok = 45 <= rsi_30m <= 70
         else:
             ok = 40 <= rsi_30m <= 75
+        return RuleResult("RSI 30m", ok, f"RSI={rsi_30m:.2f}")
+    
     else:  # SHORT
-        if risk_level == "LOW":
-            ok = 30 <= rsi_30m <= 45
+        # ✅ اضافه کردن شرط اشباع نبودن
+        if rsi_30m < 30:
+            ok = False
+            detail = f"RSI={rsi_30m:.2f} [اشباع فروش - ریسک برگشت]"
+        elif risk_level == "LOW":
+            ok = 35 <= rsi_30m <= 45
         elif risk_level == "MEDIUM":
-            ok = 25 <= rsi_30m <= 50
+            ok = 30 <= rsi_30m <= 48
         else:
-            ok = 20 <= rsi_30m <= 55
-    return RuleResult("RSI 30m", ok, f"RSI={rsi_30m:.2f}")
+            ok = 25 <= rsi_30m <= 50
+        return RuleResult("RSI 30m", ok, f"RSI={rsi_30m:.2f}")
 
 def rule_macd(macd_hist, direction, risk_level) -> RuleResult:
     if macd_hist is None:
@@ -105,6 +128,7 @@ def rule_macd(macd_hist, direction, risk_level) -> RuleResult:
     if isinstance(macd_hist, list):
         macd_hist = macd_hist[-1] if macd_hist else 0.0
     
+    # ✅ سخت‌گیرانه‌تر کردن شرط MACD
     if direction == "LONG":
         if risk_level == "LOW":
             ok = macd_hist > 0.002
@@ -112,13 +136,13 @@ def rule_macd(macd_hist, direction, risk_level) -> RuleResult:
             ok = macd_hist > 0.001
         else:
             ok = macd_hist > 0.0005
-    else:  # SHORT
+    else:  # SHORT - سخت‌گیرانه‌تر
         if risk_level == "LOW":
             ok = macd_hist < -0.002
         elif risk_level == "MEDIUM":
-            ok = macd_hist < -0.001
+            ok = macd_hist < -0.0015  # از -0.001 به -0.0015
         else:
-            ok = macd_hist < -0.0005
+            ok = macd_hist < -0.001  # از -0.0005 به -0.001
     return RuleResult("MACD 30m", ok, f"MACD_hist={macd_hist:.4f}")
 
 # ===== مرحله ۲: ورود هوشمند پولبک =====
@@ -130,14 +154,14 @@ def rule_smart_pullback_entry(price_30m, ema21_30m, rsi_30m, open_15m, close_15m
         pullback_ok = price_30m < ema21_30m * 0.998
         rsi_ok = 45 <= rsi_30m <= 60
         bs = abs(close_15m - open_15m) / max(high_15m - low_15m, 1e-8)
-        candle_strong = bs >= 0.55
+        candle_strong = 0.45 <= bs <= 0.85  # ✅ محدوده قدرت مناسب
         ok = pullback_ok and rsi_ok and candle_strong
         detail = f"قیمت={price_30m:.4f} EMA={ema21_30m:.4f} RSI={rsi_30m:.1f} BS15={bs:.3f}"
     else:  # SHORT
         pullback_ok = price_30m > ema21_30m * 1.002
         rsi_ok = 35 <= rsi_30m <= 50
         bs = abs(open_15m - close_15m) / max(high_15m - low_15m, 1e-8)
-        candle_strong = bs >= 0.55
+        candle_strong = 0.45 <= bs <= 0.85  # ✅ محدوده قدرت مناسب
         ok = pullback_ok and rsi_ok and candle_strong
         detail = f"قیمت={price_30m:.4f} EMA={ema21_30m:.4f} RSI={rsi_30m:.1f} BS15={bs:.3f}"
     return RuleResult("ورود هوشمند پولبک", ok, detail)
@@ -148,22 +172,44 @@ def rule_cci_momentum(candles, direction) -> RuleResult:
     if cci is None:
         return RuleResult("CCI مومنتوم", False, "داده موجود نیست")
     
+    # ✅ اضافه کردن شرط اشباع نبودن
     if direction == "LONG":
-        ok = cci > -20
-    else:
-        ok = cci < 20
-    return RuleResult("CCI عبور از ۰", ok, f"CCI={cci:.2f}")
+        if cci > 100:
+            ok = False
+            detail = f"CCI={cci:.2f} [اشباع خرید]"
+        else:
+            ok = cci > -20
+            detail = f"CCI={cci:.2f}"
+    else:  # SHORT
+        if cci < -100:
+            ok = False
+            detail = f"CCI={cci:.2f} [اشباع فروش]"
+        else:
+            ok = cci < 20
+            detail = f"CCI={cci:.2f}"
+    return RuleResult("CCI عبور از ۰", ok, detail)
 
 def rule_stochastic_momentum(candles, direction) -> RuleResult:
     k, d = calculate_stochastic(candles)
     if k is None or d is None:
         return RuleResult("Stochastic کراس", False, "داده موجود نیست")
     
+    # ✅ اضافه کردن شرط اشباع نبودن
     if direction == "LONG":
-        ok = (k > d) and (k < 70) and (k > 20)
-    else:
-        ok = (k < d) and (k > 25) and (k < 80)
-    return RuleResult("Stochastic کراس", ok, f"K={k:.2f} D={d:.2f}")
+        if k > 80:
+            ok = False
+            detail = f"K={k:.2f} [اشباع خرید]"
+        else:
+            ok = (k > d) and (k < 70) and (k > 20)
+            detail = f"K={k:.2f} D={d:.2f}"
+    else:  # SHORT
+        if k < 20:
+            ok = False
+            detail = f"K={k:.2f} [اشباع فروش]"
+        else:
+            ok = (k < d) and (k > 25) and (k < 80)
+            detail = f"K={k:.2f} D={d:.2f}"
+    return RuleResult("Stochastic کراس", ok, detail)
 
 # ===== قوانین مرحله ۱ =====
 def rule_adx(candles: list, direction: str) -> RuleResult:
@@ -332,13 +378,13 @@ async def generate_signal(
             atr_mult, rr_target = 1.8, 2.0
         else:
             atr_mult, rr_target = 2.0, 1.5
-    else:  # SHORT
+    else:  # SHORT - استاپ پهن‌تر
         if strength_ratio >= 0.65:
-            atr_mult, rr_target = 1.8, 2.5
+            atr_mult, rr_target = 2.0, 2.5  # افزایش از 1.8 به 2.0
         elif strength_ratio >= 0.45:
-            atr_mult, rr_target = 2.2, 2.0
+            atr_mult, rr_target = 2.5, 2.0  # افزایش از 2.2 به 2.5
         else:
-            atr_mult, rr_target = 2.5, 1.5
+            atr_mult, rr_target = 3.0, 1.5  # افزایش از 2.5 به 3.0
 
     if direction == "LONG":
         swing_low = calculate_swing_low(candles)
@@ -347,7 +393,7 @@ async def generate_signal(
         take_profit = price_30m + (price_30m - stop_loss) * rr_target
     else:  # SHORT
         swing_high = calculate_swing_high(candles)
-        buffer = 0.002 * price_30m
+        buffer = 0.003 * price_30m  # افزایش بافر از 0.002 به 0.003
         stop_loss = swing_high + buffer if swing_high is not None else price_30m + atr_val_30m * atr_mult
         take_profit = price_30m - (stop_loss - price_30m) * rr_target
 
@@ -360,7 +406,8 @@ async def generate_signal(
     else:
         final_risk = "HIGH"
 
-    status = "SIGNAL" if passed_weight >= total_weight * 0.55 else "NO_SIGNAL"
+    # ✅ افزایش آستانه سیگنال برای کیفیت بهتر
+    status = "SIGNAL" if passed_weight >= total_weight * 0.60 else "NO_SIGNAL"
 
     passed_list = [str(r) for r in rule_results if r.passed]
     failed_list = [str(r) for r in rule_results if not r.passed]
