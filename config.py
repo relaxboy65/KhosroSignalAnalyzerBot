@@ -4,6 +4,23 @@ import os
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
+# ============================================
+# تنظیمات پیشرفته سیستم سیگنال (نسخه S8.1)
+# ============================================
+
+# آستانه‌های اصلی
+ADX_THRESHOLD_LONG = 25              # حداقل ADX برای سیگنال LONG (افزایش از 22)
+ADX_THRESHOLD_SHORT = 22             # حداقل ADX برای سیگنال SHORT
+SIGNAL_THRESHOLD = 0.55              # حداقل نسبت وزنی برای صدور سیگنال (افزایش از 0.50)
+BS_MAX_THRESHOLD = 0.75              # حداکثر قدرت کندل مجاز (کاهش از 0.80)
+MACD_LONG_MEDIUM_THRESHOLD = 0.0015  # حداقل MACD برای LONG MEDIUM (افزایش از 0.001)
+RSI_SHORT_MIN = 35                   # حداقل RSI برای SHORT (جلوگیری از اشباع فروش)
+RANGE_FILTER_DIFF = 0.003            # حداقل فاصله EMA برای فیلتر رنج ترکیبی
+RANGE_FILTER_ADX = 22                # حداقل ADX برای فیلتر رنج ترکیبی
+MAX_DAILY_SIGNALS = 30               # حداکثر سیگنال در روز (جلوگیری از بیش‌فعالی)
+
+# ============================================
+
 # ⚖️ سطوح ریسک
 RISK_LEVELS = [
     {
@@ -85,7 +102,7 @@ RISK_FACTORS = {
 
 # 📈 آستانه‌های اندیکاتورهای پیشرفته
 INDICATOR_THRESHOLDS = {
-    "ADX_STRONG": 25,   # روند قوی
+    "ADX_STRONG": 25,   # روند قوی (هماهنگ با ADX_THRESHOLD_LONG)
     "ADX_WEAK": 20,     # روند ضعیف
     "ADX_MEDIUM": 20,   # روند متوسط
     "CCI_OVERBOUGHT": 100,
