@@ -21,6 +21,40 @@ from signal_store import append_signal_row, tehran_time_str
 
 logger = logging.getLogger(__name__)
 
+# ============================================
+# تنظیمات پیشرفته S8.1
+# ============================================
+ADX_THRESHOLD_LONG = 25        # افزایش از 22 به 25
+ADX_THRESHOLD_SHORT = 22       # بدون تغییر
+SIGNAL_THRESHOLD = 0.55        # افزایش از 0.50 به 0.55
+BS_MAX_THRESHOLD = 0.75        # کاهش از 0.80 به 0.75
+MACD_LONG_MEDIUM_THRESHOLD = 0.0015  # افزایش از 0.001 به 0.0015
+RSI_SHORT_MIN = 35             # بدون تغییر
+RANGE_FILTER_DIFF = 0.003      # بدون تغییر
+RANGE_FILTER_ADX = 22          # بدون تغییر
+MAX_DAILY_SIGNALS = 30         # حداکثر سیگنال در روز (جدید)
+
+# ===== شمارنده سیگنال روزانه =====
+_daily_signal_count = 0
+_daily_signal_date = None
+
+def reset_daily_count():
+    global _daily_signal_count, _daily_signal_date
+    today = datetime.now(ZoneInfo("Asia/Tehran")).strftime("%Y-%m-%d")
+    if _daily_signal_date != today:
+        _daily_signal_date = today
+        _daily_signal_count = 0
+
+def can_issue_signal() -> bool:
+    global _daily_signal_count
+    reset_daily_count()
+    if _daily_signal_count >= MAX_DAILY_SIGNALS:
+        return False
+    _daily_signal_count += 1
+    return True
+
+# ============================================
+
 @dataclass
 class RuleResult:
     name: str
@@ -53,8 +87,8 @@ def rule_body_strength(open_15m, close_15m, high_15m, low_15m, risk_rules) -> Ru
     bs = abs(close_15m - open_15m) / max(high_15m - low_15m, 1e-6)
     th = risk_rules.get("candle_15m_strength", 0.5)
     
-    # ✅ S8: اگر قدرت کندل خیلی بالا بود (> 0.8)، احتمال پایان حرکت
-    if bs > 0.8:
+    # ✅ S8.1: کاهش آستانه از 0.8 به 0.75
+    if bs > BS_MAX_THRESHOLD:
         ok = False
         detail = f"BS15={bs:.3f} [خیلی بالا - احتمال پایان حرکت]"
     else:
@@ -66,8 +100,8 @@ def rule_body_strength_5m(open_5m, close_5m, high_5m, low_5m, risk_rules) -> Rul
     bs = abs(close_5m - open_5m) / max(high_5m - low_5m, 1e-6)
     th = risk_rules.get("candle_5m_strength", 0.5)
     
-    # ✅ S8: اگر قدرت کندل 5m خیلی بالا بود (> 0.8)
-    if bs > 0.8:
+    # ✅ S8.1: کاهش آستانه از 0.8 به 0.75
+    if bs > BS_MAX_THRESHOLD:
         ok = False
         detail = f"BS5={bs:.3f} [خیلی بالا - احتمال پایان حرکت]"
     else:
@@ -107,19 +141,18 @@ def rule_rsi(rsi_30m, direction, risk_level) -> RuleResult:
         return RuleResult("RSI 30m", ok, f"RSI={rsi_30m:.2f}")
     
     else:  # SHORT
-        # ✅ S8: RSI برای SHORT حداقل 35
-        if rsi_30m < 35:
+        if rsi_30m < RSI_SHORT_MIN:
             ok = False
             detail = f"RSI={rsi_30m:.2f} [خیلی پایین - ریسک برگشت]"
         elif rsi_30m > 70:
             ok = False
             detail = f"RSI={rsi_30m:.2f} [خیلی بالا - ریسک ادامه صعود]"
         elif risk_level == "LOW":
-            ok = 35 <= rsi_30m <= 48
+            ok = RSI_SHORT_MIN <= rsi_30m <= 48
         elif risk_level == "MEDIUM":
-            ok = 35 <= rsi_30m <= 50
+            ok = RSI_SHORT_MIN <= rsi_30m <= 50
         else:
-            ok = 35 <= rsi_30m <= 55
+            ok = RSI_SHORT_MIN <= rsi_30m <= 55
         return RuleResult("RSI 30m", ok, f"RSI={rsi_30m:.2f}")
 
 def rule_macd(macd_hist, direction, risk_level) -> RuleResult:
@@ -129,12 +162,12 @@ def rule_macd(macd_hist, direction, risk_level) -> RuleResult:
     if isinstance(macd_hist, list):
         macd_hist = macd_hist[-1] if macd_hist else 0.0
     
-    # ✅ S8: MACD برای LONG MEDIUM روی 0.001
+    # ✅ S8.1: افزایش آستانه MACD برای LONG MEDIUM از 0.001 به 0.0015
     if direction == "LONG":
         if risk_level == "LOW":
             ok = macd_hist > 0.002
         elif risk_level == "MEDIUM":
-            ok = macd_hist > 0.001  # از 0.002 به 0.001 کاهش
+            ok = macd_hist > MACD_LONG_MEDIUM_THRESHOLD  # 0.0015
         else:
             ok = macd_hist > 0.0005
     else:
@@ -155,13 +188,12 @@ def rule_smart_pullback_entry(price_30m, ema21_30m, rsi_30m, open_15m, close_15m
         pullback_ok = price_30m < ema21_30m * 0.998
         rsi_ok = 45 <= rsi_30m <= 60
         bs = abs(close_15m - open_15m) / max(high_15m - low_15m, 1e-8)
-        # ✅ S8: محدوده قدرت کندل 0.40 تا 0.85
         candle_strong = 0.40 <= bs <= 0.85
         ok = pullback_ok and rsi_ok and candle_strong
         detail = f"قیمت={price_30m:.4f} EMA={ema21_30m:.4f} RSI={rsi_30m:.1f} BS15={bs:.3f}"
     else:
         pullback_ok = price_30m > ema21_30m * 1.002
-        rsi_ok = 35 <= rsi_30m <= 50
+        rsi_ok = RSI_SHORT_MIN <= rsi_30m <= 50
         bs = abs(open_15m - close_15m) / max(high_15m - low_15m, 1e-8)
         candle_strong = 0.40 <= bs <= 0.85
         ok = pullback_ok and rsi_ok and candle_strong
@@ -217,13 +249,13 @@ def rule_adx(candles: list, direction: str) -> RuleResult:
     if adx is None:
         return RuleResult("ADX", False, "داده ADX موجود نیست")
     
-    # ✅ S8: ADX برای LONG روی 22
+    # ✅ S8.1: ADX برای LONG از 22 به 25 افزایش
     if direction == "LONG":
-        ok = adx > 22 and (di_plus > di_minus)
-        threshold = 22
+        ok = adx > ADX_THRESHOLD_LONG and (di_plus > di_minus)
+        threshold = ADX_THRESHOLD_LONG
     else:
-        ok = adx > 22 and (di_minus > di_plus)
-        threshold = 22
+        ok = adx > ADX_THRESHOLD_SHORT and (di_minus > di_plus)
+        threshold = ADX_THRESHOLD_SHORT
     detail = f"ADX={adx:.2f} [>{threshold}], DI+={di_plus:.2f}, DI-={di_minus:.2f}"
     return RuleResult("ADX", ok, detail)
 
@@ -249,9 +281,9 @@ def rule_combined_range_filter(diff: float, adx: float, direction: str) -> RuleR
     این نسخه از OR استفاده می‌کند (سخت‌گیرانه‌تر)
     """
     if direction == "LONG":
-        ok = not (diff < 0.003 or adx < 22)
+        ok = not (diff < RANGE_FILTER_DIFF or adx < RANGE_FILTER_ADX)
     else:
-        ok = not (diff < 0.003 or adx < 22)
+        ok = not (diff < RANGE_FILTER_DIFF or adx < RANGE_FILTER_ADX)
     detail = f"diff={diff:.4f}, ADX={adx:.2f} -> {'✅ OK' if ok else '❌ رد'}"
     return RuleResult("فیلتر رنج ترکیبی", ok, detail)
 
@@ -436,8 +468,13 @@ async def generate_signal(
     else:
         final_risk = "HIGH"
 
-    # ✅ S8: آستانه نهایی 0.50
-    status = "SIGNAL" if passed_weight >= total_weight * 0.50 else "NO_SIGNAL"
+    # ✅ S8.1: افزایش آستانه نهایی از 0.50 به 0.55
+    status = "SIGNAL" if passed_weight >= total_weight * SIGNAL_THRESHOLD else "NO_SIGNAL"
+
+    # ✅ S8.1: محدودیت تعداد سیگنال روزانه
+    if status == "SIGNAL" and not can_issue_signal():
+        logger.info(f"⛔ محدودیت تعداد سیگنال روزانه رسیده است - {symbol}")
+        status = "NO_SIGNAL"
 
     passed_list = [str(r) for r in rule_results if r.passed]
     failed_list = [str(r) for r in rule_results if not r.passed]
