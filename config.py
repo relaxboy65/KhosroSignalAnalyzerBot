@@ -5,19 +5,23 @@ TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 # ============================================
-# تنظیمات پیشرفته سیستم سیگنال (نسخه S8.1)
+# تنظیمات پیشرفته سیستم سیگنال (نسخه S8.2)
 # ============================================
 
 # آستانه‌های اصلی
-ADX_THRESHOLD_LONG = 25              # حداقل ADX برای سیگنال LONG (افزایش از 22)
+ADX_THRESHOLD_LONG = 25              # حداقل ADX برای سیگنال LONG
 ADX_THRESHOLD_SHORT = 22             # حداقل ADX برای سیگنال SHORT
-SIGNAL_THRESHOLD = 0.55              # حداقل نسبت وزنی برای صدور سیگنال (افزایش از 0.50)
-BS_MAX_THRESHOLD = 0.75              # حداکثر قدرت کندل مجاز (کاهش از 0.80)
-MACD_LONG_MEDIUM_THRESHOLD = 0.0015  # حداقل MACD برای LONG MEDIUM (افزایش از 0.001)
-RSI_SHORT_MIN = 35                   # حداقل RSI برای SHORT (جلوگیری از اشباع فروش)
+SIGNAL_THRESHOLD = 0.55              # حداقل نسبت وزنی برای صدور سیگنال
+BS_MAX_THRESHOLD = 0.85              # حداکثر قدرت کندل مجاز (افزایش از 0.75 به 0.85)
+MACD_LONG_MEDIUM_THRESHOLD = 0.001   # حداقل MACD برای LONG MEDIUM (کاهش از 0.0015 به 0.001)
+RSI_SHORT_MIN = 35                   # حداقل RSI برای SHORT
 RANGE_FILTER_DIFF = 0.003            # حداقل فاصله EMA برای فیلتر رنج ترکیبی
 RANGE_FILTER_ADX = 22                # حداقل ADX برای فیلتر رنج ترکیبی
-MAX_DAILY_SIGNALS = 30               # حداکثر سیگنال در روز (جلوگیری از بیش‌فعالی)
+MAX_DAILY_SIGNALS = 30               # حداکثر سیگنال در روز
+
+# بازه‌های ممنوعه برای معامله (به وقت تهران)
+FORBIDDEN_HOURS_START = 0    # ساعت شروع (۰۰:۰۰)
+FORBIDDEN_HOURS_END = 4      # ساعت پایان (۰۴:۰۰)
 
 # ============================================
 
@@ -78,10 +82,10 @@ SYMBOLS = [
 
 # ⚙️ پارامترهای مدیریت ریسک دینامیک
 RISK_PARAMS = {
-    'atr_multiplier': 1.2,   # فاصله استاپ از ورود بر اساس ATR
-    'rr_target': 2.0,        # نسبت هدف به ریسک
-    'swing_lookback': 10,    # نگاه به 10 کندل اخیر برای Swing
-    'rr_fallback': 2.0       # اگر ATR نباشد، RR بر اساس Swing
+    'atr_multiplier': 1.2,
+    'rr_target': 2.0,
+    'swing_lookback': 10,
+    'rr_fallback': 2.0
 }
 
 # 📊 وزن‌دهی فاکتورها برای هر سطح ریسک
@@ -102,9 +106,9 @@ RISK_FACTORS = {
 
 # 📈 آستانه‌های اندیکاتورهای پیشرفته
 INDICATOR_THRESHOLDS = {
-    "ADX_STRONG": 25,   # روند قوی (هماهنگ با ADX_THRESHOLD_LONG)
-    "ADX_WEAK": 20,     # روند ضعیف
-    "ADX_MEDIUM": 20,   # روند متوسط
+    "ADX_STRONG": 25,
+    "ADX_WEAK": 20,
+    "ADX_MEDIUM": 20,
     "CCI_OVERBOUGHT": 100,
     "CCI_OVERSOLD": -100,
     "STOCH_OVERBOUGHT": 80,
