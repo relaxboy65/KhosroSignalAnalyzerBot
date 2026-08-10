@@ -1,4 +1,4 @@
-# bot.py - با تغییرات نهایی
+# bot.py - بدون تغییر (همان نسخه قبلی با 4h=45 روز)
 
 import aiohttp
 import asyncio
@@ -33,7 +33,6 @@ intervals = {
     "4h": "4hour"
 }
 
-# ========== دریافت داده برای یک تایم‌فریم ==========
 async def fetch_timeframe(session, symbol, tf, days):
     api_tf = intervals[tf]
     end_time = int(datetime.utcnow().timestamp())
@@ -57,22 +56,19 @@ async def fetch_timeframe(session, symbol, tf, days):
         logger.error(f"خطا در دریافت {symbol} {tf}: {e}")
         return tf, []
 
-# ========== دریافت همه تایم‌فریم‌ها ==========
 async def fetch_all_timeframes(session, symbol):
-    # ✅ تنظیم جدید - افزایش داده 4h به 45 روز
     settings = {
         "1m": 1,
         "5m": 3,
         "15m": 5,
         "30m": 7,
         "1h": 14,
-        "4h": 45  # افزایش از 30 به 45 روز برای دریافت بیشتر EMA200
+        "4h": 45
     }
     tasks = [fetch_timeframe(session, symbol, tf, days) for tf, days in settings.items()]
     results = await asyncio.gather(*tasks)
     return {tf: candles for tf, candles in results if candles}
 
-# ========== پردازش یک نماد ==========
 async def process_symbol(symbol, data, index, total):
     if not data or "30m" not in data:
         logger.info(f"[{index}/{total}] {symbol} — ❌ داده کافی نیست")
