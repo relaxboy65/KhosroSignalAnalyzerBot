@@ -9,7 +9,19 @@ from zoneinfo import ZoneInfo
 from config import (
     RISK_LEVELS, RISK_PARAMS, RISK_FACTORS,
     INDICATOR_THRESHOLDS, ADVANCED_RISK_PARAMS,
-    TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+    TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID,
+    # تنظیمات جدید S8.2
+    ADX_THRESHOLD_LONG,
+    ADX_THRESHOLD_SHORT,
+    SIGNAL_THRESHOLD,
+    BS_MAX_THRESHOLD,
+    MACD_LONG_MEDIUM_THRESHOLD,
+    RSI_SHORT_MIN,
+    RANGE_FILTER_DIFF,
+    RANGE_FILTER_ADX,
+    MAX_DAILY_SIGNALS,
+    FORBIDDEN_HOURS_START,
+    FORBIDDEN_HOURS_END
 )
 from indicators import (
     calculate_adx, calculate_cci, calculate_sar, 
@@ -20,19 +32,6 @@ from patterns import ema_rejection, resistance_test, pullback, double_top_bottom
 from signal_store import append_signal_row, tehran_time_str
 
 logger = logging.getLogger(__name__)
-
-# ============================================
-# تنظیمات پیشرفته S8.1
-# ============================================
-ADX_THRESHOLD_LONG = 25        # افزایش از 22 به 25
-ADX_THRESHOLD_SHORT = 22       # بدون تغییر
-SIGNAL_THRESHOLD = 0.55        # افزایش از 0.50 به 0.55
-BS_MAX_THRESHOLD = 0.75        # کاهش از 0.80 به 0.75
-MACD_LONG_MEDIUM_THRESHOLD = 0.0015  # افزایش از 0.001 به 0.0015
-RSI_SHORT_MIN = 35             # بدون تغییر
-RANGE_FILTER_DIFF = 0.003      # بدون تغییر
-RANGE_FILTER_ADX = 22          # بدون تغییر
-MAX_DAILY_SIGNALS = 30         # حداکثر سیگنال در روز (جدید)
 
 # ===== شمارنده سیگنال روزانه =====
 _daily_signal_count = 0
@@ -52,6 +51,15 @@ def can_issue_signal() -> bool:
         return False
     _daily_signal_count += 1
     return True
+
+def is_forbidden_hour() -> bool:
+    """بررسی می‌کند که ساعت فعلی در بازه ممنوعه (نیمه‌شب) باشد یا خیر"""
+    now = datetime.now(ZoneInfo("Asia/Tehran"))
+    current_hour = now.hour
+    # بازه ممنوعه: از FORBIDDEN_HOURS_START تا FORBIDDEN_HOURS_END (به وقت تهران)
+    if FORBIDDEN_HOURS_START <= current_hour < FORBIDDEN_HOURS_END:
+        return True
+    return False
 
 # ============================================
 
@@ -87,7 +95,7 @@ def rule_body_strength(open_15m, close_15m, high_15m, low_15m, risk_rules) -> Ru
     bs = abs(close_15m - open_15m) / max(high_15m - low_15m, 1e-6)
     th = risk_rules.get("candle_15m_strength", 0.5)
     
-    # ✅ S8.1: کاهش آستانه از 0.8 به 0.75
+    # ✅ S8.2: افزایش آستانه از 0.75 به 0.85
     if bs > BS_MAX_THRESHOLD:
         ok = False
         detail = f"BS15={bs:.3f} [خیلی بالا - احتمال پایان حرکت]"
@@ -100,7 +108,7 @@ def rule_body_strength_5m(open_5m, close_5m, high_5m, low_5m, risk_rules) -> Rul
     bs = abs(close_5m - open_5m) / max(high_5m - low_5m, 1e-6)
     th = risk_rules.get("candle_5m_strength", 0.5)
     
-    # ✅ S8.1: کاهش آستانه از 0.8 به 0.75
+    # ✅ S8.2: افزایش آستانه از 0.75 به 0.85
     if bs > BS_MAX_THRESHOLD:
         ok = False
         detail = f"BS5={bs:.3f} [خیلی بالا - احتمال پایان حرکت]"
@@ -162,12 +170,12 @@ def rule_macd(macd_hist, direction, risk_level) -> RuleResult:
     if isinstance(macd_hist, list):
         macd_hist = macd_hist[-1] if macd_hist else 0.0
     
-    # ✅ S8.1: افزایش آستانه MACD برای LONG MEDIUM از 0.001 به 0.0015
+    # ✅ S8.2: کاهش آستانه MACD برای LONG MEDIUM از 0.0015 به 0.001
     if direction == "LONG":
         if risk_level == "LOW":
             ok = macd_hist > 0.002
         elif risk_level == "MEDIUM":
-            ok = macd_hist > MACD_LONG_MEDIUM_THRESHOLD  # 0.0015
+            ok = macd_hist > MACD_LONG_MEDIUM_THRESHOLD  # 0.001
         else:
             ok = macd_hist > 0.0005
     else:
@@ -249,7 +257,6 @@ def rule_adx(candles: list, direction: str) -> RuleResult:
     if adx is None:
         return RuleResult("ADX", False, "داده ADX موجود نیست")
     
-    # ✅ S8.1: ADX برای LONG از 22 به 25 افزایش
     if direction == "LONG":
         ok = adx > ADX_THRESHOLD_LONG and (di_plus > di_minus)
         threshold = ADX_THRESHOLD_LONG
@@ -274,7 +281,7 @@ def rule_range_filter(ema21_30m: float, ema50_30m: float, price_30m: float) -> R
     ok = diff > 0.005
     return RuleResult("فیلتر رنج", ok, f"فاصله EMA={diff:.4f} [>0.005]")
 
-# ===== قانون جدید: فیلتر رنج ترکیبی (نسخه S8 - OR) =====
+# ===== قانون فیلتر رنج ترکیبی (بدون تغییر) =====
 def rule_combined_range_filter(diff: float, adx: float, direction: str) -> RuleResult:
     """
     ✅ S8: اگر فاصله EMA کمتر از 0.003 یا ADX کمتر از 22 باشد، سیگنال رد می‌شود.
@@ -402,6 +409,25 @@ async def generate_signal(
 ) -> Optional[dict]:
     time_str = tehran_time_str()
 
+    # ✅ S8.2: بررسی بازه ممنوعه (نیمه‌شب)
+    if is_forbidden_hour():
+        logger.info(f"⏰ ساعت {datetime.now(ZoneInfo('Asia/Tehran')).strftime('%H:%M')} در بازه ممنوعه (۰۰:۰۰-۰۴:۰۰) - رد سیگنال {symbol}")
+        return {
+            "symbol": symbol,
+            "direction": direction,
+            "risk": "HIGH",
+            "status": "NO_SIGNAL",
+            "strength": None,
+            "price": price_30m,
+            "stop_loss": 0,
+            "take_profit": 0,
+            "time": time_str,
+            "signal_source": "بازه ممنوعه (نیمه‌شب)",
+            "details": [],
+            "passed_weight": 0,
+            "total_weight": 0
+        }
+
     # محاسبه ADX برای استفاده در فیلتر ترکیبی
     adx, _, _ = calculate_adx(candles)
     if adx is None:
@@ -468,10 +494,10 @@ async def generate_signal(
     else:
         final_risk = "HIGH"
 
-    # ✅ S8.1: افزایش آستانه نهایی از 0.50 به 0.55
+    # وضعیت نهایی
     status = "SIGNAL" if passed_weight >= total_weight * SIGNAL_THRESHOLD else "NO_SIGNAL"
 
-    # ✅ S8.1: محدودیت تعداد سیگنال روزانه
+    # محدودیت تعداد سیگنال روزانه
     if status == "SIGNAL" and not can_issue_signal():
         logger.info(f"⛔ محدودیت تعداد سیگنال روزانه رسیده است - {symbol}")
         status = "NO_SIGNAL"
