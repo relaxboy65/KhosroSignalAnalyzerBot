@@ -5,15 +5,16 @@ TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 # ============================================
-# تنظیمات پیشرفته سیستم سیگنال (نسخه S8.2)
+# تنظیمات پیشرفته سیستم سیگنال (نسخه S8.3)
 # ============================================
 
 # آستانه‌های اصلی
 ADX_THRESHOLD_LONG = 25              # حداقل ADX برای سیگنال LONG
 ADX_THRESHOLD_SHORT = 22             # حداقل ADX برای سیگنال SHORT
 SIGNAL_THRESHOLD = 0.55              # حداقل نسبت وزنی برای صدور سیگنال
-BS_MAX_THRESHOLD = 0.85              # حداکثر قدرت کندل مجاز (افزایش از 0.75 به 0.85)
-MACD_LONG_MEDIUM_THRESHOLD = 0.001   # حداقل MACD برای LONG MEDIUM (کاهش از 0.0015 به 0.001)
+BS_MAX_THRESHOLD = 0.80              # حداکثر قدرت کندل مجاز (کاهش از 0.85 به 0.80)
+BS_MIN_THRESHOLD = 0.40              # حداقل قدرت کندل مجاز (کاهش از 0.48 به 0.40)
+MACD_LONG_MEDIUM_THRESHOLD = 0.001   # حداقل MACD برای LONG MEDIUM
 RSI_SHORT_MIN = 35                   # حداقل RSI برای SHORT
 RANGE_FILTER_DIFF = 0.003            # حداقل فاصله EMA برای فیلتر رنج ترکیبی
 RANGE_FILTER_ADX = 22                # حداقل ADX برای فیلتر رنج ترکیبی
@@ -34,8 +35,8 @@ RISK_LEVELS = [
         'rules': {
             'trend_4h_emas': [21, 55, 200],
             'trend_1h_emas': [21, 55],
-            'candle_15m_strength': 0.6,
-            'candle_5m_strength': 0.6,
+            'candle_15m_strength': 0.50,   # کاهش از 0.60 به 0.50
+            'candle_5m_strength': 0.50,    # کاهش از 0.60 به 0.50
             'rsi_threshold_count': 5,
             'macd_threshold_count': 5,
             'entry_break_threshold': 0.0,
@@ -48,8 +49,8 @@ RISK_LEVELS = [
         'rules': {
             'trend_4h_emas': [21, 55],
             'trend_1h_emas': [21, 55],
-            'candle_15m_strength': 0.48,
-            'candle_5m_strength': 0.48,
+            'candle_15m_strength': 0.40,   # کاهش از 0.48 به 0.40
+            'candle_5m_strength': 0.40,    # کاهش از 0.48 به 0.40
             'rsi_threshold_count': 4,
             'macd_threshold_count': 4,
             'entry_break_threshold': 0.003,
@@ -62,8 +63,8 @@ RISK_LEVELS = [
         'rules': {
             'trend_4h_emas': [21],
             'trend_1h_emas': [21, 55],
-            'candle_15m_strength': 0.35,
-            'candle_5m_strength': 0.35,
+            'candle_15m_strength': 0.30,   # کاهش از 0.35 به 0.30
+            'candle_5m_strength': 0.30,    # کاهش از 0.35 به 0.30
             'rsi_threshold_count': 3,
             'macd_threshold_count': 3,
             'entry_break_threshold': 0.003,
@@ -111,8 +112,8 @@ INDICATOR_THRESHOLDS = {
     "ADX_MEDIUM": 20,
     "CCI_OVERBOUGHT": 100,
     "CCI_OVERSOLD": -100,
-    "STOCH_OVERBOUGHT": 80,
-    "STOCH_OVERSOLD": 20
+    "STOCH_OVERBOUGHT": 75,   # کاهش از 80 به 75
+    "STOCH_OVERSOLD": 25      # افزایش از 20 به 25
 }
 
 # 🛡 مدیریت ریسک پیشرفته
