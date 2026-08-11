@@ -10,11 +10,12 @@ from config import (
     RISK_LEVELS, RISK_PARAMS, RISK_FACTORS,
     INDICATOR_THRESHOLDS, ADVANCED_RISK_PARAMS,
     TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID,
-    # تنظیمات جدید S8.2
+    # تنظیمات جدید S8.3
     ADX_THRESHOLD_LONG,
     ADX_THRESHOLD_SHORT,
     SIGNAL_THRESHOLD,
     BS_MAX_THRESHOLD,
+    BS_MIN_THRESHOLD,
     MACD_LONG_MEDIUM_THRESHOLD,
     RSI_SHORT_MIN,
     RANGE_FILTER_DIFF,
@@ -56,7 +57,6 @@ def is_forbidden_hour() -> bool:
     """بررسی می‌کند که ساعت فعلی در بازه ممنوعه (نیمه‌شب) باشد یا خیر"""
     now = datetime.now(ZoneInfo("Asia/Tehran"))
     current_hour = now.hour
-    # بازه ممنوعه: از FORBIDDEN_HOURS_START تا FORBIDDEN_HOURS_END (به وقت تهران)
     if FORBIDDEN_HOURS_START <= current_hour < FORBIDDEN_HOURS_END:
         return True
     return False
@@ -93,12 +93,15 @@ async def send_to_telegram(text: str):
 # ===== قوانین پایه =====
 def rule_body_strength(open_15m, close_15m, high_15m, low_15m, risk_rules) -> RuleResult:
     bs = abs(close_15m - open_15m) / max(high_15m - low_15m, 1e-6)
-    th = risk_rules.get("candle_15m_strength", 0.5)
+    th = risk_rules.get("candle_15m_strength", 0.4)
     
-    # ✅ S8.2: افزایش آستانه از 0.75 به 0.85
+    # ✅ S8.3: استفاده از BS_MAX_THRESHOLD و BS_MIN_THRESHOLD
     if bs > BS_MAX_THRESHOLD:
         ok = False
         detail = f"BS15={bs:.3f} [خیلی بالا - احتمال پایان حرکت]"
+    elif bs < BS_MIN_THRESHOLD:
+        ok = False
+        detail = f"BS15={bs:.3f} [خیلی پایین - کندل ضعیف]"
     else:
         ok = bs >= th
         detail = f"BS15={bs:.3f} [≥ {th}]"
@@ -106,12 +109,15 @@ def rule_body_strength(open_15m, close_15m, high_15m, low_15m, risk_rules) -> Ru
 
 def rule_body_strength_5m(open_5m, close_5m, high_5m, low_5m, risk_rules) -> RuleResult:
     bs = abs(close_5m - open_5m) / max(high_5m - low_5m, 1e-6)
-    th = risk_rules.get("candle_5m_strength", 0.5)
+    th = risk_rules.get("candle_5m_strength", 0.4)
     
-    # ✅ S8.2: افزایش آستانه از 0.75 به 0.85
+    # ✅ S8.3: استفاده از BS_MAX_THRESHOLD و BS_MIN_THRESHOLD
     if bs > BS_MAX_THRESHOLD:
         ok = False
         detail = f"BS5={bs:.3f} [خیلی بالا - احتمال پایان حرکت]"
+    elif bs < BS_MIN_THRESHOLD:
+        ok = False
+        detail = f"BS5={bs:.3f} [خیلی پایین - کندل ضعیف]"
     else:
         ok = bs >= th
         detail = f"BS5={bs:.3f} [≥ {th}]"
@@ -170,7 +176,6 @@ def rule_macd(macd_hist, direction, risk_level) -> RuleResult:
     if isinstance(macd_hist, list):
         macd_hist = macd_hist[-1] if macd_hist else 0.0
     
-    # ✅ S8.2: کاهش آستانه MACD برای LONG MEDIUM از 0.0015 به 0.001
     if direction == "LONG":
         if risk_level == "LOW":
             ok = macd_hist > 0.002
@@ -196,14 +201,15 @@ def rule_smart_pullback_entry(price_30m, ema21_30m, rsi_30m, open_15m, close_15m
         pullback_ok = price_30m < ema21_30m * 0.998
         rsi_ok = 45 <= rsi_30m <= 60
         bs = abs(close_15m - open_15m) / max(high_15m - low_15m, 1e-8)
-        candle_strong = 0.40 <= bs <= 0.85
+        # ✅ S8.3: محدوده قدرت کندل با BS_MIN و BS_MAX هماهنگ
+        candle_strong = BS_MIN_THRESHOLD <= bs <= BS_MAX_THRESHOLD
         ok = pullback_ok and rsi_ok and candle_strong
         detail = f"قیمت={price_30m:.4f} EMA={ema21_30m:.4f} RSI={rsi_30m:.1f} BS15={bs:.3f}"
     else:
         pullback_ok = price_30m > ema21_30m * 1.002
         rsi_ok = RSI_SHORT_MIN <= rsi_30m <= 50
         bs = abs(open_15m - close_15m) / max(high_15m - low_15m, 1e-8)
-        candle_strong = 0.40 <= bs <= 0.85
+        candle_strong = BS_MIN_THRESHOLD <= bs <= BS_MAX_THRESHOLD
         ok = pullback_ok and rsi_ok and candle_strong
         detail = f"قیمت={price_30m:.4f} EMA={ema21_30m:.4f} RSI={rsi_30m:.1f} BS15={bs:.3f}"
     return RuleResult("ورود هوشمند پولبک", ok, detail)
@@ -235,17 +241,21 @@ def rule_stochastic_momentum(candles, direction) -> RuleResult:
     if k is None or d is None:
         return RuleResult("Stochastic کراس", False, "داده موجود نیست")
     
+    # ✅ S8.3: تغییر آستانه‌های اشباع از 80/20 به 75/25
+    STOCH_OVERBOUGHT = 75
+    STOCH_OVERSOLD = 25
+    
     if direction == "LONG":
-        if k > 80:
+        if k > STOCH_OVERBOUGHT:
             ok = False
-            detail = f"K={k:.2f} [اشباع خرید]"
+            detail = f"K={k:.2f} [اشباع خرید - ریسک برگشت]"
         else:
-            ok = (k > d) and (k < 70) and (k > 20)
+            ok = (k > d) and (k < 70) and (k > STOCH_OVERSOLD)
             detail = f"K={k:.2f} D={d:.2f}"
     else:
-        if k < 20:
+        if k < STOCH_OVERSOLD:
             ok = False
-            detail = f"K={k:.2f} [اشباع فروش]"
+            detail = f"K={k:.2f} [اشباع فروش - ریسک برگشت]"
         else:
             ok = (k < d) and (k > 25) and (k < 80)
             detail = f"K={k:.2f} D={d:.2f}"
@@ -281,16 +291,17 @@ def rule_range_filter(ema21_30m: float, ema50_30m: float, price_30m: float) -> R
     ok = diff > 0.005
     return RuleResult("فیلتر رنج", ok, f"فاصله EMA={diff:.4f} [>0.005]")
 
-# ===== قانون فیلتر رنج ترکیبی (بدون تغییر) =====
+# ===== قانون فیلتر رنج ترکیبی (نسخه S8.3 - AND) =====
 def rule_combined_range_filter(diff: float, adx: float, direction: str) -> RuleResult:
     """
-    ✅ S8: اگر فاصله EMA کمتر از 0.003 یا ADX کمتر از 22 باشد، سیگنال رد می‌شود.
-    این نسخه از OR استفاده می‌کند (سخت‌گیرانه‌تر)
+    ✅ S8.3: تغییر از OR به AND
+    اگر فاصله EMA کمتر از 0.003 و ADX کمتر از 22 باشد، سیگنال رد می‌شود.
+    این نسخه از AND استفاده می‌کند (سخت‌گیرانه‌تر در بازار رنج با ADX بالا)
     """
     if direction == "LONG":
-        ok = not (diff < RANGE_FILTER_DIFF or adx < RANGE_FILTER_ADX)
+        ok = not (diff < RANGE_FILTER_DIFF and adx < RANGE_FILTER_ADX)
     else:
-        ok = not (diff < RANGE_FILTER_DIFF or adx < RANGE_FILTER_ADX)
+        ok = not (diff < RANGE_FILTER_DIFF and adx < RANGE_FILTER_ADX)
     detail = f"diff={diff:.4f}, ADX={adx:.2f} -> {'✅ OK' if ok else '❌ رد'}"
     return RuleResult("فیلتر رنج ترکیبی", ok, detail)
 
@@ -409,7 +420,7 @@ async def generate_signal(
 ) -> Optional[dict]:
     time_str = tehran_time_str()
 
-    # ✅ S8.2: بررسی بازه ممنوعه (نیمه‌شب)
+    # بررسی بازه ممنوعه (نیمه‌شب)
     if is_forbidden_hour():
         logger.info(f"⏰ ساعت {datetime.now(ZoneInfo('Asia/Tehran')).strftime('%H:%M')} در بازه ممنوعه (۰۰:۰۰-۰۴:۰۰) - رد سیگنال {symbol}")
         return {
