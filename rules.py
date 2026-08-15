@@ -10,7 +10,7 @@ from config import (
     RISK_LEVELS, RISK_PARAMS, RISK_FACTORS,
     INDICATOR_THRESHOLDS, ADVANCED_RISK_PARAMS,
     TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID,
-    # تنظیمات جدید S8.3
+    # تنظیمات جدید S8.4
     ADX_THRESHOLD_LONG,
     ADX_THRESHOLD_SHORT,
     SIGNAL_THRESHOLD,
@@ -18,8 +18,11 @@ from config import (
     BS_MIN_THRESHOLD,
     MACD_LONG_MEDIUM_THRESHOLD,
     RSI_SHORT_MIN,
+    RSI_LONG_MIN,
+    RSI_SHORT_MAX,
     RANGE_FILTER_DIFF,
     RANGE_FILTER_ADX,
+    RANGE_FILTER_MIN_DIFF,
     MAX_DAILY_SIGNALS,
     FORBIDDEN_HOURS_START,
     FORBIDDEN_HOURS_END
@@ -54,7 +57,6 @@ def can_issue_signal() -> bool:
     return True
 
 def is_forbidden_hour() -> bool:
-    """بررسی می‌کند که ساعت فعلی در بازه ممنوعه (نیمه‌شب) باشد یا خیر"""
     now = datetime.now(ZoneInfo("Asia/Tehran"))
     current_hour = now.hour
     if FORBIDDEN_HOURS_START <= current_hour < FORBIDDEN_HOURS_END:
@@ -95,7 +97,6 @@ def rule_body_strength(open_15m, close_15m, high_15m, low_15m, risk_rules) -> Ru
     bs = abs(close_15m - open_15m) / max(high_15m - low_15m, 1e-6)
     th = risk_rules.get("candle_15m_strength", 0.4)
     
-    # ✅ S8.3: استفاده از BS_MAX_THRESHOLD و BS_MIN_THRESHOLD
     if bs > BS_MAX_THRESHOLD:
         ok = False
         detail = f"BS15={bs:.3f} [خیلی بالا - احتمال پایان حرکت]"
@@ -111,7 +112,6 @@ def rule_body_strength_5m(open_5m, close_5m, high_5m, low_5m, risk_rules) -> Rul
     bs = abs(close_5m - open_5m) / max(high_5m - low_5m, 1e-6)
     th = risk_rules.get("candle_5m_strength", 0.4)
     
-    # ✅ S8.3: استفاده از BS_MAX_THRESHOLD و BS_MIN_THRESHOLD
     if bs > BS_MAX_THRESHOLD:
         ok = False
         detail = f"BS5={bs:.3f} [خیلی بالا - احتمال پایان حرکت]"
@@ -143,30 +143,35 @@ def rule_rsi(rsi_30m, direction, risk_level) -> RuleResult:
         return RuleResult("RSI 30m", False, "داده موجود نیست")
     
     if direction == "LONG":
+        # ✅ S8.4: حداقل RSI برای LONG از 40 به 45 افزایش
         if rsi_30m > 75:
             ok = False
             detail = f"RSI={rsi_30m:.2f} [اشباع خرید - ریسک برگشت]"
+        elif rsi_30m < RSI_LONG_MIN:
+            ok = False
+            detail = f"RSI={rsi_30m:.2f} [خیلی پایین - ریسک ادامه نزول]"
         elif risk_level == "LOW":
             ok = 50 <= rsi_30m <= 65
         elif risk_level == "MEDIUM":
-            ok = 45 <= rsi_30m <= 70
+            ok = 48 <= rsi_30m <= 70
         else:
-            ok = 40 <= rsi_30m <= 75
+            ok = 45 <= rsi_30m <= 75
         return RuleResult("RSI 30m", ok, f"RSI={rsi_30m:.2f}")
     
     else:  # SHORT
+        # ✅ S8.4: حداکثر RSI برای SHORT از 55 به 50 کاهش
         if rsi_30m < RSI_SHORT_MIN:
             ok = False
             detail = f"RSI={rsi_30m:.2f} [خیلی پایین - ریسک برگشت]"
-        elif rsi_30m > 70:
+        elif rsi_30m > RSI_SHORT_MAX:
             ok = False
             detail = f"RSI={rsi_30m:.2f} [خیلی بالا - ریسک ادامه صعود]"
         elif risk_level == "LOW":
-            ok = RSI_SHORT_MIN <= rsi_30m <= 48
+            ok = RSI_SHORT_MIN <= rsi_30m <= 45
         elif risk_level == "MEDIUM":
-            ok = RSI_SHORT_MIN <= rsi_30m <= 50
+            ok = RSI_SHORT_MIN <= rsi_30m <= 48
         else:
-            ok = RSI_SHORT_MIN <= rsi_30m <= 55
+            ok = RSI_SHORT_MIN <= rsi_30m <= 50
         return RuleResult("RSI 30m", ok, f"RSI={rsi_30m:.2f}")
 
 def rule_macd(macd_hist, direction, risk_level) -> RuleResult:
@@ -180,7 +185,7 @@ def rule_macd(macd_hist, direction, risk_level) -> RuleResult:
         if risk_level == "LOW":
             ok = macd_hist > 0.002
         elif risk_level == "MEDIUM":
-            ok = macd_hist > MACD_LONG_MEDIUM_THRESHOLD  # 0.001
+            ok = macd_hist > MACD_LONG_MEDIUM_THRESHOLD
         else:
             ok = macd_hist > 0.0005
     else:
@@ -201,7 +206,6 @@ def rule_smart_pullback_entry(price_30m, ema21_30m, rsi_30m, open_15m, close_15m
         pullback_ok = price_30m < ema21_30m * 0.998
         rsi_ok = 45 <= rsi_30m <= 60
         bs = abs(close_15m - open_15m) / max(high_15m - low_15m, 1e-8)
-        # ✅ S8.3: محدوده قدرت کندل با BS_MIN و BS_MAX هماهنگ
         candle_strong = BS_MIN_THRESHOLD <= bs <= BS_MAX_THRESHOLD
         ok = pullback_ok and rsi_ok and candle_strong
         detail = f"قیمت={price_30m:.4f} EMA={ema21_30m:.4f} RSI={rsi_30m:.1f} BS15={bs:.3f}"
@@ -241,9 +245,9 @@ def rule_stochastic_momentum(candles, direction) -> RuleResult:
     if k is None or d is None:
         return RuleResult("Stochastic کراس", False, "داده موجود نیست")
     
-    # ✅ S8.3: تغییر آستانه‌های اشباع از 80/20 به 75/25
-    STOCH_OVERBOUGHT = 75
-    STOCH_OVERSOLD = 25
+    # ✅ S8.4: تغییر آستانه‌های اشباع از 75/25 به 70/30
+    STOCH_OVERBOUGHT = 70
+    STOCH_OVERSOLD = 30
     
     if direction == "LONG":
         if k > STOCH_OVERBOUGHT:
@@ -291,18 +295,41 @@ def rule_range_filter(ema21_30m: float, ema50_30m: float, price_30m: float) -> R
     ok = diff > 0.005
     return RuleResult("فیلتر رنج", ok, f"فاصله EMA={diff:.4f} [>0.005]")
 
-# ===== قانون فیلتر رنج ترکیبی (نسخه S8.3 - AND) =====
+# ===== قانون فیلتر رنج ترکیبی (نسخه S8.4 - OR + شرط diff) =====
 def rule_combined_range_filter(diff: float, adx: float, direction: str) -> RuleResult:
     """
-    ✅ S8.3: تغییر از OR به AND
-    اگر فاصله EMA کمتر از 0.003 و ADX کمتر از 22 باشد، سیگنال رد می‌شود.
-    این نسخه از AND استفاده می‌کند (سخت‌گیرانه‌تر در بازار رنج با ADX بالا)
+    ✅ S8.4: نسخه جدید فیلتر رنج ترکیبی
+    - اگر فاصله EMA کمتر از 0.003 باشد، سیگنال رد می‌شود (بدون توجه به ADX)
+    - اگر فاصله EMA کمتر از 0.002 باشد، حتماً رد می‌شود
+    - اگر ADX کمتر از 22 باشد و diff کمتر از 0.005 باشد، رد می‌شود
     """
+    # شرط ۱: اگر diff بسیار پایین باشد (< 0.002)، حتماً رد می‌شود
+    if diff < RANGE_FILTER_MIN_DIFF:
+        ok = False
+        detail = f"diff={diff:.4f} [خیلی پایین - بازار رنج]"
+        return RuleResult("فیلتر رنج ترکیبی", ok, detail)
+    
+    # شرط ۲: اگر diff پایین باشد (< 0.003)، رد می‌شود (حتی با ADX بالا)
+    if diff < RANGE_FILTER_DIFF:
+        ok = False
+        detail = f"diff={diff:.4f} [کمتر از 0.003 - بازار رنج]"
+        return RuleResult("فیلتر رنج ترکیبی", ok, detail)
+    
+    # شرط ۳: اگر ADX پایین باشد (برای LONG < 25، برای SHORT < 22)
     if direction == "LONG":
-        ok = not (diff < RANGE_FILTER_DIFF and adx < RANGE_FILTER_ADX)
+        if adx < ADX_THRESHOLD_LONG:
+            ok = False
+            detail = f"diff={diff:.4f}, ADX={adx:.2f} [ADX پایین برای LONG]"
+            return RuleResult("فیلتر رنج ترکیبی", ok, detail)
     else:
-        ok = not (diff < RANGE_FILTER_DIFF and adx < RANGE_FILTER_ADX)
-    detail = f"diff={diff:.4f}, ADX={adx:.2f} -> {'✅ OK' if ok else '❌ رد'}"
+        if adx < ADX_THRESHOLD_SHORT:
+            ok = False
+            detail = f"diff={diff:.4f}, ADX={adx:.2f} [ADX پایین برای SHORT]"
+            return RuleResult("فیلتر رنج ترکیبی", ok, detail)
+    
+    # همه شرایط پاس شد
+    ok = True
+    detail = f"diff={diff:.4f}, ADX={adx:.2f} -> ✅ OK"
     return RuleResult("فیلتر رنج ترکیبی", ok, detail)
 
 # ===== قوانین الگو =====
