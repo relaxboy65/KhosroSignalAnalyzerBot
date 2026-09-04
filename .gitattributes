@@ -1,2 +1,2 @@
-# SQLite 1m cache can grow large; enable Git LFS if the file exceeds ~50–100 MB
-market_data.db filter=lfs diff=lfs merge=lfs -text
+# market_data.db is normal git (not LFS) to avoid pointer files breaking SQLite on Actions.
+# If DB exceeds ~80MB later, enable LFS manually and set checkout lfs: true.
