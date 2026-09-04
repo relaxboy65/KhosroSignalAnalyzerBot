@@ -1,6 +1,6 @@
 name: Bootstrap 1m DB (one-time)
 
-# فقط یک‌بار: پر کردن حدود ۹۰ روز کندل ۱ دقیقه‌ای برای همه نمادها
+# فقط یک‌بار: پاک کردن DB قبلی و پر کردن حدود ۹۰ روز کندل ۱ دقیقه‌ای
 on:
   workflow_dispatch:
 
@@ -27,10 +27,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Full 90-day 1m backfill
+      - name: Full 90-day 1m backfill (force wipe + refill)
         env:
           CANDLE_DB_PATH: market_data.db
-        run: python collect_1m_data.py --days 90
+        run: python collect_1m_data.py --force --days 90
+
+      - name: Show DB size
+        run: ls -lh market_data.db && python -c "from candle_store import database_stats; print(database_stats())"
 
       - name: Commit market_data.db
         uses: stefanzweifel/git-auto-commit-action@v5
