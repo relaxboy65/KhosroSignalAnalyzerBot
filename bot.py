@@ -101,11 +101,12 @@ async def fetch_klines(session, symbol, tf, start_at, end_at):
 
 
 async def fetch_symbol(session, symbol):
+    """Fetch all strategy timeframes. Keys are tf names ('5m','15m',...)."""
     out = {}
     for tf in TIMEFRAMES:
-        k, v = await fetch_timeframe(session, symbol, tf, LOOKBACK_DAYS[tf])
-        if v:
-            out[k] = v
+        candles, ok = await fetch_timeframe(session, symbol, tf, LOOKBACK_DAYS[tf])
+        if ok and candles:
+            out[tf] = candles
     return out
 
 
