@@ -1,0 +1,54 @@
+name: Signal Bot
+
+# هر ۳۰ دقیقه در ساعات فعال (تقریباً غیر از نیمه‌شب تهران)
+# Tehran UTC+3:30 → ساعات ممنوعه ۰–۴ تهران ≈ ۲۰:۳۰–۰۰:۳۰ UTC
+on:
+  schedule:
+    - cron: "0,30 1-20 * * *"
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run signal bot (resolve OPEN on 1m + new signals)
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          CANDLE_DB_PATH: market_data.db
+        run: python bot.py
+
+      - name: Upload log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bot-log
+          path: bot_log.txt
+          if-no-files-found: ignore
+
+      - name: Commit signals + market DB
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Signal bot: update ledger and 1m cache"
+          file_pattern: "signals/*.csv market_data.db"
+          skip_dirty_check: false
+          skip_fetch: false
