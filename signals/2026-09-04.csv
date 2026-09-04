@@ -1,1 +1,0 @@
-symbol,direction,risk_level,entry_price,stop_loss,take_profit,issued_at_tehran,issued_at_epoch,status,hit_time_tehran,hit_price,broker_fee_usd,final_pnl_usd,position_margin_usd,leverage,notional_usd,return_pct,telegram_message_id,resolution_message_id,signal_source
