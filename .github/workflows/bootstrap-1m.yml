@@ -1,0 +1,45 @@
+name: Bootstrap 1m DB v11.0.1 (one-time)
+# KhosroSignalAnalyzerBot v11.0.1
+
+# فقط یک‌بار: پاک کردن DB قبلی و پر کردن حدود ۹۰ روز کندل ۱ دقیقه‌ای
+on:
+  workflow_dispatch:
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Full 90-day 1m backfill (force wipe + refill)
+        env:
+          CANDLE_DB_PATH: market_data.db
+        run: python collect_1m_data.py --force --days 90
+
+      - name: Show DB size
+        run: ls -lh market_data.db && python -c "from candle_store import database_stats; print(database_stats())"
+
+      - name: Commit market_data.db
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Bootstrap: 90d 1m OHLCV in market_data.db"
+          file_pattern: "market_data.db"
+          skip_dirty_check: false
+          skip_fetch: false

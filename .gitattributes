@@ -1,0 +1,2 @@
+# market_data.db is normal git (not LFS) to avoid pointer files breaking SQLite on Actions.
+# If DB exceeds ~80MB later, enable LFS manually and set checkout lfs: true.

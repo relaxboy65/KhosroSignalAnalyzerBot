@@ -1,0 +1,14 @@
+[Unit]
+Description=Khosro Signal Analyzer 1m market data collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/path/to/KhosroSignalAnalyzerBot
+ExecStart=/usr/bin/python3 /path/to/KhosroSignalAnalyzerBot/collect_1m_data.py --loop --interval 120
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
