@@ -52,12 +52,3 @@ jobs:
         with:
           name: bot-log
           path: bot_log.txt
-          if-no-files-found: ignore
-
-      - name: Commit signals + market DB
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "Signal bot: update ledger and 1m cache"
-          file_pattern: "signals/*.csv signals/ai_budget_*.json market_data.db"
-          skip_dirty_check: false
-          skip_fetch: false
