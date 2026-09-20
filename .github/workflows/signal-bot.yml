@@ -1,5 +1,5 @@
-name: Signal Bot v11.1.0
-# KhosroSignalAnalyzerBot v11.1.0
+name: Signal Bot v11.1.1
+# KhosroSignalAnalyzerBot v11.1.1
 
 # هر ۳۰ دقیقه در ساعات فعال (تقریباً غیر از نیمه‌شب تهران)
 # Tehran UTC+3:30 → ساعات ممنوعه ۰–۴ تهران ≈ ۲۰:۳۰–۰۰:۳۰ UTC
@@ -52,3 +52,12 @@ jobs:
         with:
           name: bot-log
           path: bot_log.txt
+          if-no-files-found: ignore
+
+      - name: Commit signals + market DB
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Signal bot: update ledger and 1m cache"
+          file_pattern: "signals/*.csv signals/ai_budget_*.json market_data.db"
+          skip_dirty_check: false
+          skip_fetch: false

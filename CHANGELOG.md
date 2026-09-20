@@ -1,3 +1,7 @@
+## v11.1.1
+- Fixed AI model IDs after live API errors: Groq `openai/gpt-oss-20b`, Cerebras `llama3.1-8b`, Cloudflare `@cf/meta/llama-3.1-8b-instruct-fast` (+ fallbacks).
+- SambaNova/SiliconFlow still need account balance (HTTP 402); they fail gracefully.
+
 ## v11.1.0
 - AI committee expanded to 7 providers: OpenRouter, Mistral, Cerebras, Groq, SambaNova, SiliconFlow, Cloudflare Workers AI.
 - Per-provider vote logging (`AI_VOTE` / `AI_COMMITTEE`) and Telegram section listing each API decision, confidence, model, reason.

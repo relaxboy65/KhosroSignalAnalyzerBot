@@ -1,6 +1,6 @@
 import os
 
-VERSION = "11.1.0"
+VERSION = "11.1.1"
 STRATEGY_NAME = "Khosro Confluence Engine + AI Committee"
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
@@ -76,7 +76,8 @@ AI_PROVIDERS = [
     {
         'name': 'cerebras',
         'url': 'https://api.cerebras.ai/v1/chat/completions',
-        'model': 'llama-3.3-70b',
+        'model': 'llama3.1-8b',
+        'fallback_models': ['llama-3.3-70b', 'qwen-3-32b'],
         'key_env': 'CEREBRAS_API_KEY',
         'weight': 14,
         'retry_429': False,
@@ -85,8 +86,8 @@ AI_PROVIDERS = [
     {
         'name': 'groq',
         'url': 'https://api.groq.com/openai/v1/chat/completions',
-        'model': 'llama-3.3-70b-versatile',
-        'fallback_models': ['llama-3.1-8b-instant'],
+        'model': 'openai/gpt-oss-20b',
+        'fallback_models': ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'],
         'key_env': 'GROQ_API_KEY',
         'weight': 16,
         'retry_429': True,
@@ -115,7 +116,8 @@ AI_PROVIDERS = [
         'name': 'cloudflare',
         'url': None,  # built at runtime from account id
         'url_template': 'https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1/chat/completions',
-        'model': '@cf/meta/llama-3.1-8b-instruct',
+        'model': '@cf/meta/llama-3.1-8b-instruct-fast',
+        'fallback_models': ['@cf/meta/llama-3.3-70b-instruct-fp8-fast', '@cf/meta/llama-4-scout-17b-16e-instruct'],
         'key_env': 'CLOUDFLARE_API_TOKEN',
         'extra_env': {'account_id': 'CLOUDFLARE_ACCOUNT_ID'},
         'weight': 12,

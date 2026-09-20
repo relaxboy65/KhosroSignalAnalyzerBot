@@ -1,5 +1,5 @@
-name: Collect 1m Candles v11.1.0
-# KhosroSignalAnalyzerBot v11.1.0
+name: Collect 1m Candles v11.1.1
+# KhosroSignalAnalyzerBot v11.1.1
 
 # روی GitHub نمی‌توان --loop دائمی داشت؛ هر چند دقیقه یک سیکل incremental
 on:
