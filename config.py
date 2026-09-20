@@ -1,10 +1,6 @@
 import os
 
-<<<<<<< HEAD
 VERSION = "11.1.0"
-=======
-VERSION = "11.0.1"
->>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
 STRATEGY_NAME = "Khosro Confluence Engine + AI Committee"
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
@@ -51,11 +47,7 @@ WEIGHTS = {
 assert abs(sum(WEIGHTS.values()) - 100) < 1e-9, 'WEIGHTS must sum to 100'
 
 # ---------------------------------------------------------------------------
-<<<<<<< HEAD
 # AI committee — each provider votes independently; weights sum to 100
-=======
-# AI committee (3 free providers, each with its own vote weight)
->>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
 # ---------------------------------------------------------------------------
 AI_PROVIDERS = [
     {
@@ -68,13 +60,8 @@ AI_PROVIDERS = [
             'nex-agi/nex-n2.5-mini:free',
         ],
         'key_env': 'OPENROUTER_API_KEY',
-<<<<<<< HEAD
         'weight': 18,
         'retry_429': True,
-=======
-        'weight': 35,
-        'retry_429': True,      # free models share provider capacity — retry once
->>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
         'enabled': True,
     },
     {
@@ -82,13 +69,8 @@ AI_PROVIDERS = [
         'url': 'https://api.mistral.ai/v1/chat/completions',
         'model': 'open-mistral-nemo',
         'key_env': 'MISTRAL_API_KEY',
-<<<<<<< HEAD
         'weight': 14,
         'retry_429': True,
-=======
-        'weight': 30,
-        'retry_429': True,      # free tier is 1 rps — one retry after 429
->>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
         'enabled': True,
     },
     {
@@ -96,16 +78,11 @@ AI_PROVIDERS = [
         'url': 'https://api.cerebras.ai/v1/chat/completions',
         'model': 'llama-3.3-70b',
         'key_env': 'CEREBRAS_API_KEY',
-<<<<<<< HEAD
         'weight': 14,
-=======
-        'weight': 25,
->>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
         'retry_429': False,
         'enabled': True,
     },
     {
-<<<<<<< HEAD
         'name': 'groq',
         'url': 'https://api.groq.com/openai/v1/chat/completions',
         'model': 'llama-3.3-70b-versatile',
@@ -125,13 +102,10 @@ AI_PROVIDERS = [
         'enabled': True,
     },
     {
-=======
->>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
         'name': 'siliconflow',
         'url': 'https://api.siliconflow.com/v1/chat/completions',
         'model': 'Qwen/Qwen2.5-7B-Instruct',
         'key_env': 'SILICONFLOW_API_KEY',
-<<<<<<< HEAD
         'weight': 12,
         'retry_429': False,
         'enabled': True,
@@ -151,14 +125,6 @@ AI_PROVIDERS = [
 ]
 
 
-=======
-        'weight': 10,
-        'retry_429': False,
-        'enabled': True,        # votes only when the account has balance; fails gracefully
-    },
-]
-
->>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
 AI_SYSTEM_PROMPT = (
     'You are a disciplined crypto trade reviewer. You receive one proposed trade '
     'with component scores and evidence. Approve only when the evidence clearly '
@@ -186,11 +152,7 @@ AI_TEMPERATURE = 0.2
 AI_MAX_TOKENS = 700    # reasoning-style free models burn tokens before the JSON
 AI_TIMEOUT_SECONDS = 35
 AI_MAX_CALLS_PER_RUN = 6
-<<<<<<< HEAD
 AI_DAILY_BUDGET = 50   # committee calls per Tehran day
-=======
-AI_DAILY_BUDGET = 40   # fits inside OpenRouter free tier (50 requests/day)
->>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
 
 THRESHOLDS = {
     'low_score': 78,

@@ -1,10 +1,5 @@
-<<<<<<< HEAD
 name: Bootstrap 1m DB v11.1.0 (one-time)
 # KhosroSignalAnalyzerBot v11.1.0
-=======
-name: Bootstrap 1m DB v11.0.1 (one-time)
-# KhosroSignalAnalyzerBot v11.0.1
->>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
 
 # فقط یک‌بار: پاک کردن DB قبلی و پر کردن حدود ۹۰ روز کندل ۱ دقیقه‌ای
 on:
