@@ -1,0 +1,63 @@
+name: Signal Bot v11.1.0
+# KhosroSignalAnalyzerBot v11.1.0
+
+# هر ۳۰ دقیقه در ساعات فعال (تقریباً غیر از نیمه‌شب تهران)
+# Tehran UTC+3:30 → ساعات ممنوعه ۰–۴ تهران ≈ ۲۰:۳۰–۰۰:۳۰ UTC
+on:
+  schedule:
+    - cron: "0,30 1-20 * * *"
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run signal bot (resolve OPEN on 1m + new signals)
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
+          SILICONFLOW_API_KEY: ${{ secrets.SILICONFLOW_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          SAMBANOVA_API_KEY: ${{ secrets.SAMBANOVA_API_KEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CANDLE_DB_PATH: market_data.db
+        run: python bot.py
+
+      - name: Upload log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bot-log
+          path: bot_log.txt
+          if-no-files-found: ignore
+
+      - name: Commit signals + market DB
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Signal bot: update ledger and 1m cache"
+          file_pattern: "signals/*.csv signals/ai_budget_*.json market_data.db"
+          skip_dirty_check: false
+          skip_fetch: false
