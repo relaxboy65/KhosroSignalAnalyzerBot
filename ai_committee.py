@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 """AI committee for Khosro Confluence Engine v11.1.
 
 Each enabled provider with a valid API key votes independently.
@@ -8,6 +9,26 @@ exactly what each API decided.
 """
 from __future__ import annotations
 
+=======
+"""AI committee for Khosro Confluence Engine v11.
+
+Three independent free AI providers vote on each candidate signal:
+  - OpenRouter  (z-ai/glm-5.2:free)            weight 40
+  - Mistral     (open-mistral-nemo)            weight 35
+  - SiliconFlow (Qwen/Qwen2.5-7B-Instruct)     weight 25
+
+Each provider returns strict JSON {"decision":"approve|reject",
+"confidence":0-100,"reason":"..."}. Votes are combined into a single 0..1
+score plus a boolean majority approval. If every provider fails, the
+committee is "unavailable" and the engine falls back to a neutral 0.5 so a
+network outage can never silently approve (or veto) trades.
+
+Budgets keep the free quotas safe:
+  - AI_MAX_CALLS_PER_RUN   per process run
+  - AI_DAILY_BUDGET        persisted daily counter (signals/ai_budget_*.json)
+"""
+from __future__ import annotations
+>>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
 import asyncio
 import json
 import logging
@@ -28,6 +49,12 @@ logger = logging.getLogger(__name__)
 _run_calls = 0
 
 
+<<<<<<< HEAD
+=======
+# ---------------------------------------------------------------------------
+# budgeting
+# ---------------------------------------------------------------------------
+>>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
 def reset_budget():
     global _run_calls
     _run_calls = 0
@@ -62,6 +89,7 @@ def budget_left() -> int:
                       AI_DAILY_BUDGET - _daily_count()))
 
 
+<<<<<<< HEAD
 def providers_with_keys():
     """Return enabled providers that currently have an API key in the environment."""
     ready = []
@@ -79,6 +107,11 @@ def providers_with_keys():
     return ready
 
 
+=======
+# ---------------------------------------------------------------------------
+# JSON extraction (models wrap JSON in prose / code fences sometimes)
+# ---------------------------------------------------------------------------
+>>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
 def _extract_json(text: str) -> dict | None:
     if not text:
         return None
@@ -89,6 +122,11 @@ def _extract_json(text: str) -> dict | None:
             return data
     except Exception:
         pass
+<<<<<<< HEAD
+=======
+    # reasoning models often repeat the schema first and answer last —
+    # so try brace groups from the END of the text backwards.
+>>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
     matches = re.findall(r"\{[^{}]*\}", cleaned, re.S)
     for candidate in reversed(matches):
         try:
@@ -114,6 +152,7 @@ def _normalize_vote(data: dict) -> tuple[bool, int] | None:
     return None
 
 
+<<<<<<< HEAD
 def build_user_prompt(candidate: dict) -> str:
     lines = [
         f"Symbol: {candidate.get('symbol')}",
@@ -130,10 +169,37 @@ def build_user_prompt(candidate: dict) -> str:
         lines.append(f"  - {c.get('name')}: score={c.get('score')} detail={c.get('detail')}")
     lines.append(
         'Reply ONLY JSON: {"decision":"approve"|"reject","confidence":0-100,"reason":"short reason"}'
+=======
+# ---------------------------------------------------------------------------
+# prompt
+# ---------------------------------------------------------------------------
+def build_user_prompt(candidate: dict) -> str:
+    lines = [
+        f"Symbol: {candidate.get('symbol')}",
+        f"Proposed trade: {candidate.get('direction')} (spot/derivative scalp, ~30m basis)",
+        f"Entry {candidate.get('price')}, SL {candidate.get('stop_loss')}, TP {candidate.get('take_profit')}, R:R 1:{candidate.get('rr')}",
+    ]
+    atr = candidate.get('atr_pct')
+    if atr is not None:
+        lines.append(f"ATR: {atr:.2%} of price")
+    comps = candidate.get('components') or []
+    if comps:
+        lines.append("Analysis components (score 0..1 and evidence):")
+        for c in comps:
+            lines.append(f"- {c['name']}: {c['score']:.2f} | {c.get('detail', '')[:110]}")
+    rules = candidate.get('custom_rules')
+    if rules:
+        lines.append("Trader rules you MUST respect:")
+        lines.append(rules)
+    lines.append(
+        'Vote now. Reply ONLY with JSON: '
+        '{"decision":"approve|reject","confidence":0-100,"reason":"max 15 words"}'
+>>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
     )
     return "\n".join(lines)
 
 
+<<<<<<< HEAD
 def _resolve_url(provider: dict) -> str | None:
     if provider.get("url"):
         return provider["url"]
@@ -164,10 +230,21 @@ async def _call_provider(session: aiohttp.ClientSession, provider: dict,
     if not url:
         return {"ok": False, "error": "missing url/account_id", "provider": name}
 
+=======
+# ---------------------------------------------------------------------------
+# single provider call
+# ---------------------------------------------------------------------------
+async def _call_provider(session: aiohttp.ClientSession, provider: dict,
+                         user_prompt: str) -> dict:
+    api_key = os.getenv(provider["key_env"], "").strip()
+    if not api_key:
+        return {"ok": False, "error": f"missing {provider['key_env']}"}
+>>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
+<<<<<<< HEAD
     if name == "openrouter":
         headers["HTTP-Referer"] = "https://github.com/khosro-signal-bot"
         headers["X-Title"] = "KhosroSignalAnalyzerBot"
@@ -176,6 +253,14 @@ async def _call_provider(session: aiohttp.ClientSession, provider: dict,
     attempts_per_model = 2 if provider.get("retry_429") else 1
     last_error = "unknown"
 
+=======
+    if provider["name"] == "openrouter":
+        headers["HTTP-Referer"] = "https://github.com/khosro-signal-bot"
+        headers["X-Title"] = "KhosroSignalAnalyzerBot"
+    models = [provider["model"]] + list(provider.get("fallback_models") or [])
+    attempts_per_model = 2 if provider.get("retry_429") else 1
+    last_error = "unknown"
+>>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
     for model in models:
         payload = {
             "model": model,
@@ -188,15 +273,21 @@ async def _call_provider(session: aiohttp.ClientSession, provider: dict,
         }
         for attempt in range(attempts_per_model):
             try:
+<<<<<<< HEAD
                 async with session.post(
                     url, headers=headers, json=payload,
                     timeout=aiohttp.ClientTimeout(total=AI_TIMEOUT_SECONDS),
                 ) as resp:
                     body_text = await resp.text()
+=======
+                async with session.post(provider["url"], headers=headers, json=payload,
+                                        timeout=aiohttp.ClientTimeout(total=AI_TIMEOUT_SECONDS)) as resp:
+>>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
                     if resp.status == 429 and attempt + 1 < attempts_per_model:
                         await asyncio.sleep(3.0)
                         continue
                     if resp.status != 200:
+<<<<<<< HEAD
                         last_error = f"{model}: HTTP {resp.status}: {body_text[:120]}"
                         break
                     try:
@@ -234,10 +325,33 @@ async def _call_provider(session: aiohttp.ClientSession, provider: dict,
                         "confidence": conf,
                         "reason": reason,
                     }
+=======
+                        last_error = f"{model}: HTTP {resp.status}: {(await resp.text())[:100]}"
+                        break       # move to next model
+                    data = await resp.json()
+                    choice = (data.get("choices") or [{}])[0]
+                    message = choice.get("message") or {}
+                    # some reasoning models return the visible text in `reasoning`
+                    content = (message.get("content")
+                               or message.get("reasoning")
+                               or message.get("reasoning_content") or "")
+                    vote = _extract_json(content)
+                    if vote is None:
+                        last_error = f"{model}: unparseable reply"
+                        break       # move to next model
+                    norm = _normalize_vote(vote)
+                    if norm is None:
+                        last_error = f"{model}: bad decision field"
+                        break       # move to next model
+                    approved, conf = norm
+                    return {"ok": True, "model": model, "approved": approved,
+                            "confidence": conf, "reason": str(vote.get("reason", ""))[:80]}
+>>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
             except Exception as exc:
                 last_error = f"{model}: {type(exc).__name__}: {str(exc)[:90]}"
                 if attempt + 1 < attempts_per_model:
                     await asyncio.sleep(1.5)
+<<<<<<< HEAD
     logger.warning("AI_VOTE provider=%s FAIL %s", name, last_error)
     return {"ok": False, "error": last_error, "provider": name}
 
@@ -279,6 +393,24 @@ async def consult_committee(candidate: dict,
             "detail": detail, "votes": [], "report": detail,
         }
 
+=======
+    return {"ok": False, "error": last_error}
+
+
+# ---------------------------------------------------------------------------
+# committee entrypoint
+# ---------------------------------------------------------------------------
+async def consult_committee(candidate: dict,
+                            session: aiohttp.ClientSession | None = None) -> dict:
+    """Ask all enabled providers to vote on one candidate.
+
+    Returns {"available", "approved", "score", "detail", "votes"}.
+    """
+    global _run_calls
+    if budget_left() <= 0:
+        return {"available": False, "approved": None, "score": 0.5,
+                "detail": "AI budget exhausted (neutral)", "votes": []}
+>>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
     _run_calls += 1
     _bump_daily()
     user_prompt = build_user_prompt(candidate)
@@ -287,6 +419,7 @@ async def consult_committee(candidate: dict,
         session = aiohttp.ClientSession()
     votes = []
     try:
+<<<<<<< HEAD
         logger.info(
             "AI_COMMITTEE start symbol=%s dir=%s providers=%s",
             candidate.get("symbol"), candidate.get("direction"),
@@ -297,10 +430,17 @@ async def consult_committee(candidate: dict,
         )
         for provider, res in zip(ready, results):
             votes.append({"weight": provider["weight"], **res})
+=======
+        tasks = [_call_provider(session, p, user_prompt) for p in AI_PROVIDERS if p.get("enabled", True)]
+        results = await asyncio.gather(*tasks)
+        for provider, res in zip([p for p in AI_PROVIDERS if p.get("enabled", True)], results):
+            votes.append({"provider": provider["name"], "weight": provider["weight"], **res})
+>>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
     finally:
         if own_session:
             await session.close()
 
+<<<<<<< HEAD
     report = format_votes_report(votes)
     ok_votes = [v for v in votes if v.get("ok")]
     if not ok_votes:
@@ -310,6 +450,14 @@ async def consult_committee(candidate: dict,
             "available": False, "approved": None, "score": 0.5,
             "detail": detail[:240], "votes": votes, "report": report,
         }
+=======
+    ok_votes = [v for v in votes if v.get("ok")]
+    if not ok_votes:
+        detail = "AI unavailable: " + "; ".join(
+            f"{v['provider']}={v.get('error', '?')}" for v in votes) or "no providers"
+        return {"available": False, "approved": None, "score": 0.5,
+                "detail": detail[:180], "votes": votes}
+>>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
 
     total_w = sum(v["weight"] for v in ok_votes) or 1
     combined = 0.0
@@ -321,6 +469,7 @@ async def consult_committee(candidate: dict,
     approves = sum(1 for v in ok_votes if v["approved"])
     rejects = len(ok_votes) - approves
     approved = approves > rejects and combined >= AI_MIN_COMMITTEE_SCORE
+<<<<<<< HEAD
     detail = (
         f"AI {approves} approve/{rejects} reject score={combined:.2f} | {report}"
     )
@@ -336,3 +485,10 @@ async def consult_committee(candidate: dict,
         "votes": votes,
         "report": report,
     }
+=======
+    detail = (f"AI {approves} approve/{rejects} reject, score={combined:.2f} | "
+              + "; ".join(f"{v['provider']}={'approve' if v['approved'] else 'reject'}"
+                          f"{v['confidence']:.0f}% ({v.get('reason', '')[:40]})" for v in ok_votes))
+    return {"available": True, "approved": approved, "score": round(combined, 3),
+            "detail": detail[:220], "votes": votes}
+>>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0

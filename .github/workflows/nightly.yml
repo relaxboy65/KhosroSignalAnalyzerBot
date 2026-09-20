@@ -1,5 +1,10 @@
+<<<<<<< HEAD
 name: Nightly cleanup v11.1.0
 # KhosroSignalAnalyzerBot v11.1.0
+=======
+name: Nightly cleanup v11.0.1
+# KhosroSignalAnalyzerBot v11.0.1
+>>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
 
 # شب تهران: prune دیتابیس + اطمینان از resolve شدن OPENها
 on:

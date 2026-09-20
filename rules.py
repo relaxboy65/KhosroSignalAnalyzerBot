@@ -204,10 +204,13 @@ def analyze_market(symbol: str, data: Dict[str,list], direction: str,
     }
     if status=='NO_SIGNAL' and ai_approved is False:
         result['reason']='AI committee rejected'
+<<<<<<< HEAD
     if ai_verdict is not None:
         result['ai_votes'] = ai_verdict.get('votes') or []
         result['ai_report'] = ai_verdict.get('report') or ai_verdict.get('detail') or ''
         result['ai_approved'] = ai_approved
+=======
+>>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
     return result
 
 

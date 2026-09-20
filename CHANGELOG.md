@@ -1,9 +1,12 @@
+<<<<<<< HEAD
 ## v11.1.0
 - AI committee expanded to 7 providers: OpenRouter, Mistral, Cerebras, Groq, SambaNova, SiliconFlow, Cloudflare Workers AI.
 - Per-provider vote logging (`AI_VOTE` / `AI_COMMITTEE`) and Telegram section listing each API decision, confidence, model, reason.
 - Budget is not consumed when no API keys are present.
 - Secrets: `GROQ_API_KEY`, `SAMBANOVA_API_KEY`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`.
 
+=======
+>>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
 ## v11.0.1
 - Fixed `generate_signal` calling missing `_analyze_with_ai` (now `analyze_with_ai`).
 - Daily signal quota no longer increments on failed checks; `record_signal_issued()` after real issue.

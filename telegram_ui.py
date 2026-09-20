@@ -10,6 +10,7 @@ def _fmt_price(value):
     return f"{value:.8f}"
 
 
+<<<<<<< HEAD
 def _ai_section(result):
     """Build readable AI vote lines for Telegram."""
     votes = result.get("ai_votes") or []
@@ -50,6 +51,8 @@ def _ai_section(result):
     return "\n".join(lines) + "\n"
 
 
+=======
+>>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
 def signal_message(result, version, margin, leverage):
     direction = result["direction"]
     long = direction == "LONG"
@@ -58,23 +61,34 @@ def signal_message(result, version, margin, leverage):
     rr = result.get("rr") or 0
     confidence = float(result.get("confidence", result.get("score", 0)))
     components = result.get("components", [])
+<<<<<<< HEAD
     top = sorted(
         [c for c in components if c.get("name") != "ai_committee"],
         key=lambda x: x.get("score", 0),
         reverse=True,
     )[:4]
+=======
+    top = sorted(components, key=lambda x: x.get("score", 0), reverse=True)[:4]
+>>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
     factors = "\n".join(
         f"  ├─ {escape(str(c['name']))}: <b>{float(c['score']):.2f}</b>"
         for c in top
     ) or "  └─ تأییدهای کافی ثبت نشده است"
+<<<<<<< HEAD
     ai_block = _ai_section(result)
+=======
+>>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
     return (
         f"<b>╔═ {icon} KHOSRO SIGNAL ═╗</b>\n"
         f"<b>{escape(result['symbol'])}</b>  ·  <b>{side}</b>\n"
         f"<code>v{escape(str(version))}</code>\n"
         f"╚════════════════════╝\n\n"
+<<<<<<< HEAD
         f"🎯 <b>Confidence</b>  <code>{confidence:.1f}%</code>\n"
         f"📊 Rule score  <code>{float(result.get('rule_score') or 0):.1f}</code>\n\n"
+=======
+        f"🎯 <b>Confidence</b>  <code>{confidence:.1f}%</code>\n\n"
+>>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
         f"💼 <b>سرمایه:</b> ${margin:.2f}  ×  <b>{leverage:g}x</b>\n"
         f"📦 <b>حجم اسمی:</b> ${margin*leverage:.2f}\n\n"
         f"<b>╭─ نقشه معامله ─╮</b>\n"
@@ -84,7 +98,10 @@ def signal_message(result, version, margin, leverage):
         f"  └─ نسبت R:R   <b>1 : {rr:.2f}</b>\n"
         f"<b>╰────────────────╯</b>\n\n"
         f"<b>🔎 مهم‌ترین تأییدها</b>\n{factors}\n\n"
+<<<<<<< HEAD
         f"{ai_block}\n"
+=======
+>>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
         f"<i>⏱ نتیجه با کندل 1m پایش می‌شود · v{escape(str(version))}</i>"
     )
 

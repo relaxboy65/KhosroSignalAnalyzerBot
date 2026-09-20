@@ -1,6 +1,12 @@
+<<<<<<< HEAD
 # KhosroSignalAnalyzerBot — v11.1.0
 
 **Khosro Confluence Engine + AI Committee** — موتور سیگنال‌دهی چندتایم‌فریمی کریپتو با ۱۰ مؤلفه SMC/تکنیکال و **کمیته وزن‌دهی ۷ سرویس هوش مصنوعی رایگان** (OpenRouter / Mistral / Cerebras / SiliconFlow).
+=======
+# KhosroSignalAnalyzerBot — v11.0.1
+
+**Khosro Confluence Engine + AI Committee** — موتور سیگنال‌دهی چندتایم‌فریمی کریپتو با ۱۰ مؤلفه SMC/تکنیکال و **کمیته وزن‌دهی ۴ سرویس هوش مصنوعی رایگان** (OpenRouter / Mistral / Cerebras / SiliconFlow).
+>>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
 
 > ⚠️ این پروژه ابزار تحلیل و بک‌تست است و سود یا دقت تضمین‌شده ندارد. اهرم ریسک را چند برابر می‌کند. قبل از استفاده واقعی، Paper Trading و کنترل ریسک مستقل انجام دهید.
 
@@ -40,7 +46,11 @@ TP یا SL ؟
 
 ## پیام‌های تلگرام
 
+<<<<<<< HEAD
 پیام سیگنال با HTML Telegram API، بخش‌بندی واضح، **نسخه ربات (v11.1.0)**، Confidence، Entry/SL/TP، R:R، سرمایه، اهرم، حجم اسمی و مهم‌ترین عوامل ساخته می‌شود (بدون متن هشدار تکراری).
+=======
+پیام سیگنال با HTML Telegram API، بخش‌بندی واضح، **نسخه ربات (v11.0.1)**، Confidence، Entry/SL/TP، R:R، سرمایه، اهرم، حجم اسمی و مهم‌ترین عوامل ساخته می‌شود (بدون متن هشدار تکراری).
+>>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
 
 پس از بسته‌شدن معامله، پیام نتیجه **به‌صورت Reply مستقیم به پیام اصلی همان سیگنال** ارسال می‌شود. `telegram_message_id` در ledger نگهداری می‌شود.
 
@@ -288,7 +298,11 @@ SLIPPAGE_PCT = 0.0005
 
 **11.0.1**
 
+<<<<<<< HEAD
 v11.1.0: fix generate_signal name, daily quota, forbidden-hour gate in live bot; Telegram without disclaimer warning; version tag in messages.
+=======
+v11.0.1: fix generate_signal name, daily quota, forbidden-hour gate in live bot; Telegram without disclaimer warning; version tag in messages.
+>>>>>>> 14915a528b6042b439031afd899c6e6e7c819cb0
 
 v10.1.0 دقت تعیین نتیجه معامله را از 5m به 1m ارتقا می‌دهد و کنترل نرخ ارسال Telegram را اضافه می‌کند.
 
