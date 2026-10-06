@@ -9,7 +9,8 @@ import aiohttp
 from config import (
     VERSION, STRATEGY_NAME, WEIGHTS, THRESHOLDS, RISK_PARAMS,
     MAX_DAILY_SIGNALS, FORBIDDEN_HOURS_START, FORBIDDEN_HOURS_END,
-    TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, MARGIN_USD, LEVERAGE,
+    TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID,
+    STOP_MAX_PCT, STOP_MIN_PCT, STRUCT_STOP_MAX_ATR,
     AI_TRIGGER_RULE_SCORE, AI_RULES_TEXT,
 )
 from indicators import calculate_ema, calculate_rsi, calculate_macd, calculate_atr, calculate_adx, find_pivots
@@ -131,22 +132,82 @@ def _atr_levels(candles, direction, risk):
     return sl,tp,atr
 
 
+def _structural_stop(candles, direction, level, risk):
+    """v11.2 structure-aware stop, symmetric for LONG/SHORT.
+
+    The ATR stop is replaced by a stop just beyond the structural pivot only
+    when the structure actually ADDS room (>= 0.8x the ATR-stop distance).
+    The old v11.1 logic replaced the stop unconditionally and without any cap,
+    which produced 6.5%-wide stops (-35%..-68% margin loss at 10x leverage).
+    The returned candidate is additionally hard-capped by _apply_stop_caps.
+    """
+    atr = calculate_atr(candles)
+    if not level or atr is None or atr <= 0:
+        return None
+    price = candles[-1]['c']
+    pad = atr * 0.15
+    if direction == 'LONG' and level < price:
+        candidate = level - pad
+        if candidate >= price:
+            return None
+    elif direction == 'SHORT' and level > price:
+        candidate = level + pad
+        if candidate <= price:
+            return None
+    else:
+        return None
+    dist = abs(price - candidate)
+    default_dist = atr * RISK_PARAMS[risk]['atr_sl']
+    if dist < default_dist * 0.8:   # structure too close: keep the ATR stop
+        return None
+    return candidate
+
+
+def _apply_stop_caps(sl, price, atr, direction, risk):
+    """v11.2 hard risk caps applied to EVERY final stop (ATR or structural):
+
+      max distance = min(STOP_MAX_PCT * price, STRUCT_STOP_MAX_ATR * ATR)
+      min distance = STOP_MIN_PCT * price  (noise protection in dead markets)
+
+    With 10x leverage this bounds the worst-case SL loss to
+    LEVERAGE * STOP_MAX_PCT = 30% of margin (was unbounded before).
+    Returns (capped_stop, was_capped).
+    """
+    dist = abs(price - sl) if sl else 0.0
+    if dist <= 0:
+        atr_fallback = atr if (atr and atr > 0) else price * 0.02
+        dist = atr_fallback * RISK_PARAMS[risk]['atr_sl']
+    max_dist = price * STOP_MAX_PCT
+    if atr and atr > 0:
+        max_dist = min(max_dist, atr * STRUCT_STOP_MAX_ATR)
+    min_dist = price * STOP_MIN_PCT
+    capped_dist = max(min_dist, min(dist, max_dist))
+    was_capped = abs(capped_dist - dist) > 1e-12
+    capped = price - capped_dist if direction == 'LONG' else price + capped_dist
+    return capped, was_capped
+
+
 def analyze_market(symbol: str, data: Dict[str,list], direction: str,
                    risk_hint='MEDIUM', ai_verdict: Optional[dict] = None) -> dict:
-    """v11 confluence engine.
+    """v11.2 confluence engine.
 
-    Hard gates (no score): enough data, HTF trend (4h+1h) and volatility.
+    Hard gates (no score): enough data, HTF trend (4h+1h — stricter for
+    SHORT), volatility and (for SHORT) a higher final score threshold.
     Weighted components: 10 SMC/technical components + candlestick pattern +
     the AI committee (highest weight). With ai_verdict=None the AI component
     is neutral (0.5) so backtests stay deterministic.
+    Stop distance is always hard-capped (STOP_MAX_PCT / STRUCT_STOP_MAX_ATR).
     """
     base=data.get('30m',[])
     if len(base)<80:
         return {'status':'NO_SIGNAL','reason':'not enough 30m candles','symbol':symbol,'direction':direction}
     # --- hard gate: higher-timeframe trend (4h and 1h must agree) ---
+    # v11.2: SHORTs need a clearly bearish HTF on BOTH timeframes (live ledger:
+    # SHORT WR 0-14% with the loose 0.35 gate that LONGs use).
+    htf_min = THRESHOLDS['short_htf_min'] if direction == 'SHORT' else 0.35
     trend4,t4d=_tf_state(data.get('4h',[]),direction)
     trend1,t1d=_tf_state(data.get('1h',[]),direction)
-    if trend4<0.35 or trend1<0.35:
+    if trend4<htf_min or trend1<htf_min:
         return {'status':'NO_SIGNAL','reason':'htf trend gate','symbol':symbol,'direction':direction,
                 'gate_4h':round(trend4,2),'gate_1h':round(trend1,2),'version':VERSION}
     # --- hard gate: volatility ---
@@ -180,28 +241,40 @@ def analyze_market(symbol: str, data: Dict[str,list], direction: str,
     risk='LOW' if score>=THRESHOLDS['low_score'] else 'MEDIUM' if score>=THRESHOLDS['medium_score'] else 'HIGH'
     sl,tp,_atr=_atr_levels(base,direction,risk)
     rr=RISK_PARAMS[risk]['rr']
-    # Structure-aware improvement: if a meaningful level exists, place stop outside it only when it remains >=2R.
-    if direction=='LONG' and support and support < price:
-        candidate=support-(atr*0.15 if atr else price*0.001)
-        if price-candidate > 0 and (price+(price-candidate)*rr) > price:
-            sl=candidate; tp=price+(price-sl)*rr
-    if direction=='SHORT' and resistance and resistance > price:
-        candidate=resistance+(atr*0.15 if atr else price*0.001)
-        if candidate-price > 0:
-            sl=candidate; tp=price-(sl-price)*rr
+    # v11.2 stop pipeline: structural improvement (symmetric, must add room)
+    # then hard caps on the FINAL stop, then TP recomputed so R:R stays exact.
+    stop_capped=False
+    struct = _structural_stop(base,direction,
+                              support if direction=='LONG' else resistance,risk)
+    if struct is not None:
+        sl=struct
+    if sl is not None:
+        sl,stop_capped=_apply_stop_caps(sl,price,_atr,direction,risk)
+        tp = price+(price-sl)*rr if direction=='LONG' else price-(sl-price)*rr
     # AI must approve when a verdict exists; 'unavailable' (approved=None) never blocks.
     ai_ok=(ai_verdict is None) or (ai_approved is not False)
-    status='SIGNAL' if score>=THRESHOLDS['signal_score'] and ai_ok and sl and tp else 'NO_SIGNAL'
+    # v11.2: SHORTs must clear a higher final score.
+    threshold=THRESHOLDS['signal_score']
+    if direction=='SHORT':
+        threshold=max(threshold,THRESHOLDS['short_signal_score'])
+    status='SIGNAL' if score>=threshold and ai_ok and sl and tp else 'NO_SIGNAL'
+    stop_pct=abs(price-sl)/price if sl else None
     result={
         'status':status,'symbol':symbol,'direction':direction,'risk':risk,'score':round(score,2),
         'rule_score':round(rule_score,2),
         'confidence':round(score,1),'price':price,'stop_loss':sl,'take_profit':tp,'atr':atr,
         'atr_pct':round(atr_pct,4) if atr else None,
+        'stop_pct':round(stop_pct,5) if stop_pct is not None else None,
+        'stop_capped':stop_capped,'score_threshold':threshold,
         'support':support,'resistance':resistance,'rr':rr,
         'components':[{'name':c.name,'score':round(c.score,3),'weight':c.weight,'detail':c.detail} for c in comps],
         'signal_source': ' | '.join(f'{c.name}={c.score:.2f}:{c.detail}' for c in comps),
         'version':VERSION,'strategy':STRATEGY_NAME
     }
+    if status=='NO_SIGNAL' and score<threshold:
+        result['reason']='score below threshold'
+        if direction=='SHORT' and THRESHOLDS['short_signal_score']>THRESHOLDS['signal_score']:
+            result['reason']='short score gate'
     if status=='NO_SIGNAL' and ai_approved is False:
         result['reason']='AI committee rejected'
     if ai_verdict is not None:
@@ -280,25 +353,3 @@ async def send_to_telegram(text: str, reply_to_message_id=None):
                     if attempt + 1 < TELEGRAM_MAX_RETRIES:
                         await asyncio.sleep(min(2 ** attempt, 8))
     return None
-
-
-async def generate_signal(symbol, direction, prefer_risk, price_30m, open_15m, close_15m, high_15m, low_15m,
-                          open_5m, close_5m, high_5m, low_5m, open_1m, close_1m, high_1m, low_1m,
-                          ema21_30m, ema50_30m, ema8_30m, ema21_1h, ema50_1h, ema21_4h, ema50_4h, ema200_4h,
-                          macd_line_30m, hist_30m, rsi_30m, atr_val_30m, curr_vol, avg_vol_30m,
-                          divergence_detected, candles, prices_series_30m, closes_by_tf):
-    if is_forbidden_hour():
-        return {'symbol':symbol,'direction':direction,'status':'NO_SIGNAL','reason':'forbidden hour','version':VERSION}
-    result=await analyze_with_ai(symbol,closes_by_tf,direction,prefer_risk)
-    if result.get('status')!='SIGNAL':
-        return result
-    if not can_issue_signal():
-        result['status']='NO_SIGNAL'; result['reason']='daily signal limit reached'; return result
-    from telegram_ui import signal_message
-    time_str=tehran_time_str()
-    result['time']=time_str
-    msg=signal_message(result, VERSION, MARGIN_USD, LEVERAGE)
-    telegram_id=await send_to_telegram(msg)
-    append_signal_row(symbol,direction,result['risk'],result['price'],result['stop_loss'],result['take_profit'],time_str,result['signal_source'],position_margin_usd=MARGIN_USD,leverage=LEVERAGE,telegram_message_id=telegram_id,issued_at_epoch=int(datetime.now(ZoneInfo('UTC')).timestamp()))
-    record_signal_issued()
-    return result

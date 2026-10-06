@@ -1,10 +1,11 @@
-"""AI committee for Khosro Confluence Engine v11.1.
+"""AI committee for the Khosro Confluence Engine.
 
 Each enabled provider with a valid API key votes independently.
 Votes are combined by weight into a 0..1 score + majority approval.
 
 Per-provider outcomes are logged and returned so Telegram / CSV can show
-exactly what each API decided.
+exactly what each API decided. Providers and their weights live in
+config.AI_PROVIDERS (weights must sum to 100).
 """
 from __future__ import annotations
 

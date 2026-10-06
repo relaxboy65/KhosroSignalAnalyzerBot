@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Runtime artifacts (not part of the repo state)
+bot_log.txt
+backtest_data/
+backtest_report.txt
+*.tmp
+
+# SQLite sidecar files (WAL/SHM/journal must never be committed)
+market_data.db-wal
+market_data.db-shm
+market_data.db-journal
+
+# NOTE: market_data.db itself IS committed (small rolling 12-day window,
+# VACUUMed and size-guarded under 80MB by candle_store.enforce_db_size_limit).

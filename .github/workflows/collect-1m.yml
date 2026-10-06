@@ -1,11 +1,17 @@
-name: Collect 1m Candles v11.1.1
-# KhosroSignalAnalyzerBot v11.1.1
+name: Collect 1m Candles v11.3.0
+# KhosroSignalAnalyzerBot v11.3.0
 
-# روی GitHub نمی‌توان --loop دائمی داشت؛ هر چند دقیقه یک سیکل incremental
+# سیکل incremental برای حفظ پیوستگی کندل‌های ۱ دقیقه‌ای بین اجراهای signal-bot.
+# v11.3: با گروه concurrency از تداخل کامیت با signal-bot جلوگیری می‌شود
+# و retention دیتابیس ۱۲ روز + VACUUM است (سقف امن زیر ۱۰۰MB گیت‌هاب).
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "15,45 * * * *"
   workflow_dispatch:
+
+concurrency:
+  group: khosro-state
+  cancel-in-progress: false
 
 jobs:
   collect:
@@ -30,15 +36,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Incremental 1m sync (one cycle)
+      - name: Incremental 1m sync (one cycle, 12d retention + VACUUM + size guard)
         env:
           CANDLE_DB_PATH: market_data.db
-        run: python collect_1m_data.py --days 10
+        run: python collect_1m_data.py --days 12
 
       - name: Commit market_data.db
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Collector: incremental 1m OHLCV update"
+          commit_message: "Collector: incremental 1m OHLCV update (v11.3.0)"
           file_pattern: "market_data.db"
           skip_dirty_check: false
           skip_fetch: false

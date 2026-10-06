@@ -1,10 +1,10 @@
-"""Download and maintain the rolling 90-day 1m OHLCV SQLite database.
+"""Download and maintain the rolling 1m OHLCV SQLite database.
 
 Usage examples:
   python collect_1m_data.py                 # fill up to retention window + catch up to now
-  python collect_1m_data.py --days 90       # ensure ~90 days of history exist
-  python collect_1m_data.py --symbol BTC-USDT --days 90
-  python collect_1m_data.py --force --days 90   # wipe DB then full backfill
+  python collect_1m_data.py --days 12       # ensure ~12 days of history exist
+  python collect_1m_data.py --symbol BTC-USDT --days 12
+  python collect_1m_data.py --force --days 12   # wipe DB then full backfill
   python collect_1m_data.py --loop --interval 120
 """
 from __future__ import annotations
@@ -21,6 +21,7 @@ from bot import fetch_klines
 from candle_store import (
     upsert_candles,
     prune_old_candles,
+    enforce_db_size_limit,
     database_stats,
     latest_timestamp,
     earliest_timestamp,
@@ -81,8 +82,10 @@ async def sync_all(symbols, days):
             except Exception as exc:
                 print(f"{symbol}: ERROR {exc}")
     deleted = prune_old_candles()
+    guard = enforce_db_size_limit()
     stats = database_stats()
-    print(f"Collector cycle complete: synced={total}, pruned={deleted}, stats={stats}")
+    print(f"Collector cycle complete: synced={total}, pruned={deleted}, "
+          f"size={guard['size_mb']}MB, guard={guard['actions'] or 'ok'}, stats={stats}")
     return total
 
 

@@ -4,7 +4,7 @@ import glob
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-from config import MARGIN_USD, LEVERAGE
+from config import MARGIN_USD, LEVERAGE, SIGNAL_MAX_AGE_HOURS
 
 SIGNALS_DIR = "signals"
 CSV_HEADERS = [
@@ -48,6 +48,25 @@ def initialize_daily_file(date_str=None):
 def _all_signal_files():
     ensure_dir()
     return sorted(glob.glob(os.path.join(SIGNALS_DIR, "*.csv")))
+
+
+def load_signals_for_date(date_str):
+    """Return every signal row (OPEN and resolved) issued on a Tehran calendar day.
+
+    Each day's ledger is one self-contained CSV named YYYY-MM-DD.csv.
+    A missing file simply yields an empty list.
+    """
+    path = os.path.join(SIGNALS_DIR, f"{date_str}.csv")
+    rows = []
+    if not os.path.exists(path):
+        return rows
+    try:
+        with open(path, newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                rows.append(row)
+    except (OSError, csv.Error):
+        pass
+    return rows
 
 
 def load_open_signals():
@@ -134,6 +153,25 @@ def update_last_checked(row, epoch):
     if changed:
         _rewrite_file(path, rows)
     return changed
+
+
+def signal_age_hours(row, now_epoch=None) -> float:
+    """Age of a signal in hours based on issued_at_epoch (v11.2)."""
+    issued = int(float(row.get("issued_at_epoch") or 0))
+    now_epoch = int(now_epoch or datetime.now(timezone.utc).timestamp())
+    return max(0.0, (now_epoch - issued) / 3600.0)
+
+
+def should_expire(row, now_epoch=None, max_age_hours=SIGNAL_MAX_AGE_HOURS) -> bool:
+    """True when an OPEN signal has been open longer than the max age (v11.2).
+
+    Set SIGNAL_MAX_AGE_HOURS = 0 in config to disable expiry.
+    """
+    if not max_age_hours or max_age_hours <= 0:
+        return False
+    if str(row.get("status", "")).upper() != "OPEN":
+        return False
+    return signal_age_hours(row, now_epoch) >= float(max_age_hours)
 
 def append_signal_row(symbol, direction, risk_level_name, entry_price, stop_loss, take_profit,
                       issued_at_tehran, signal_source, position_margin_usd=MARGIN_USD,

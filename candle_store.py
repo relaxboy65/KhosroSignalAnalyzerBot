@@ -1,7 +1,11 @@
 """SQLite storage for 1-minute OHLCV market data.
 
 The database is intentionally append/upsert based so the bot can keep a rolling
-90-day history and the backtester can later replay the exact 1m candles.
+short-horizon history and the backtester can later replay the exact 1m candles.
+
+v11.2: retention dropped 90 → 12 days and every prune is followed by an
+optional VACUUM plus a hard file-size guard, because market_data.db is
+committed back to GitHub and crossed the 100MB push limit at ~26 days.
 """
 from __future__ import annotations
 
@@ -10,7 +14,10 @@ import sqlite3
 import time
 from pathlib import Path
 
-from config import CANDLE_DB_PATH, CANDLE_RETENTION_DAYS
+from config import (
+    CANDLE_DB_PATH, CANDLE_RETENTION_DAYS,
+    DB_MAX_FILE_MB, DB_EMERGENCY_RETENTION_DAYS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +118,12 @@ def upsert_candles(candles_by_symbol):
     return total
 
 
-def prune_old_candles(now_epoch=None, retention_days=CANDLE_RETENTION_DAYS):
+def prune_old_candles(now_epoch=None, retention_days=CANDLE_RETENTION_DAYS, vacuum=True):
+    """Delete candles older than the retention window.
+
+    v11.2: when rows are deleted the file is also VACUUMed — SQLite keeps the
+    high-water mark otherwise, so the committed market_data.db never shrinks.
+    """
     now_epoch = int(now_epoch or time.time())
     cutoff = now_epoch - int(retention_days) * 86400
     with connect() as conn:
@@ -121,7 +133,75 @@ def prune_old_candles(now_epoch=None, retention_days=CANDLE_RETENTION_DAYS):
             conn.execute("PRAGMA optimize")
         except sqlite3.Error:
             pass
+    if deleted and vacuum:
+        vacuum_database()
     return deleted
+
+
+def vacuum_database():
+    """Rebuild the database file to physically reclaim free pages.
+
+    With WAL mode the data can live in the -wal sidecar, so a TRUNCATE
+    checkpoint runs after VACUUM — otherwise the main file (the one committed
+    to git) never shrinks and size checks under-report.
+    Returns the (before, after) size in MB of the whole db footprint.
+    """
+    before = db_file_size_mb()
+    with connect() as conn:
+        try:
+            conn.execute("VACUUM")
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            conn.execute("PRAGMA optimize")
+        except sqlite3.Error as exc:
+            logger.warning("VACUUM failed: %s", exc)
+    after = db_file_size_mb()
+    if after < before:
+        logger.info("DB vacuum: %.1fMB -> %.1fMB", before, after)
+    return before, after
+
+
+def db_file_size_mb() -> float:
+    """Total on-disk footprint of the db (main file + WAL/SHM sidecars), MB.
+
+    Measuring only the main file under-reports while WAL mode has un-checkpointed
+    pages, which would make the 80MB guard blind to real growth.
+    """
+    base = Path(CANDLE_DB_PATH)
+    total = 0
+    for suffix in ("", "-wal", "-shm", "-journal"):
+        p = Path(str(base) + suffix) if suffix else base
+        try:
+            total += p.stat().st_size
+        except OSError:
+            continue
+    return total / 1048576
+
+
+def enforce_db_size_limit(now_epoch=None, max_mb=DB_MAX_FILE_MB):
+    """Hard guard against the GitHub 100MB push limit (v11.2).
+
+    If the file exceeds max_mb, retention is progressively tightened
+    (CANDLE_RETENTION_DAYS → DB_EMERGENCY_RETENTION_DAYS) with VACUUM after
+    each step until the file is under the limit or the floor is reached.
+    Returns a small report dict for logging.
+    """
+    report = {"size_mb": round(db_file_size_mb(), 1), "limit_mb": max_mb, "actions": []}
+    if report["size_mb"] <= max_mb:
+        return report
+    now_epoch = int(now_epoch or time.time())
+    steps = sorted({DB_EMERGENCY_RETENTION_DAYS, max(1, CANDLE_RETENTION_DAYS // 2),
+                    max(1, CANDLE_RETENTION_DAYS // 4)})
+    for days in steps:
+        if db_file_size_mb() <= max_mb:
+            break
+        deleted = prune_old_candles(now_epoch=now_epoch, retention_days=days, vacuum=True)
+        report["actions"].append(f"prune {days}d deleted={deleted}")
+        logger.warning("DB size %.1fMB over limit; emergency prune %dd (deleted=%d)",
+                       db_file_size_mb(), days, deleted)
+    report["size_mb"] = round(db_file_size_mb(), 1)
+    if report["size_mb"] > max_mb:
+        logger.error("DB still %.1fMB after emergency prune; consider wiping market_data.db", report["size_mb"])
+    return report
 
 
 def latest_timestamp(symbol):

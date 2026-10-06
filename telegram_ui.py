@@ -68,6 +68,11 @@ def signal_message(result, version, margin, leverage):
         for c in top
     ) or "  └─ تأییدهای کافی ثبت نشده است"
     ai_block = _ai_section(result)
+    try:
+        entry_f, sl_f = float(result["price"]), float(result["stop_loss"])
+        sl_pct = abs(entry_f - sl_f) / entry_f * 100 if entry_f else 0.0
+    except (TypeError, ValueError, KeyError):
+        sl_pct = 0.0
     return (
         f"<b>╔═ {icon} KHOSRO SIGNAL ═╗</b>\n"
         f"<b>{escape(result['symbol'])}</b>  ·  <b>{side}</b>\n"
@@ -80,6 +85,7 @@ def signal_message(result, version, margin, leverage):
         f"<b>╭─ نقشه معامله ─╮</b>\n"
         f"  ├─ ورود       <code>{_fmt_price(result['price'])}</code>\n"
         f"  ├─ حد ضرر     <code>{_fmt_price(result['stop_loss'])}</code>\n"
+        f"  ├─ فاصله SL   <code>{sl_pct:.2f}%</code>\n"
         f"  ├─ هدف        <code>{_fmt_price(result['take_profit'])}</code>\n"
         f"  └─ نسبت R:R   <b>1 : {rr:.2f}</b>\n"
         f"<b>╰────────────────╯</b>\n\n"
@@ -92,9 +98,12 @@ def signal_message(result, version, margin, leverage):
 def resolution_message(row, outcome, hit_price, pnl_usd, fee_usd, margin, leverage, version=None):
     from config import VERSION
     ver = version or VERSION
-    win = outcome == "TP_HIT"
-    icon = "🏆" if win else "🛑"
-    title = "TAKE PROFIT · معامله موفق" if win else "STOP LOSS · معامله بسته شد"
+    if outcome == "TP_HIT":
+        win, icon, title = True, "🏆", "TAKE PROFIT · معامله موفق"
+    elif outcome == "EXPIRED":
+        win, icon, title = False, "⏹", "EXPIRED · انقضای معامله"
+    else:
+        win, icon, title = False, "🛑", "STOP LOSS · معامله بسته شد"
     sign = "+" if pnl_usd >= 0 else ""
     ret = (pnl_usd / margin) * 100 if margin else 0.0
     return (
@@ -114,3 +123,71 @@ def resolution_message(row, outcome, hit_price, pnl_usd, fee_usd, margin, levera
         f"<b>╰────────────────╯</b>\n\n"
         f"<i>کندل 1m · کارمزد رفت‌وبرگشت · v{escape(str(ver))}</i>"
     )
+
+
+def _dollar(value):
+    value = float(value)
+    sign = "+" if value >= 0 else "-"
+    return f"{sign}${abs(value):.2f}"
+
+
+def daily_report_message(date_str, rows, older_open_count=0):
+    """Compose the previous-day performance report sent by nightly.yml.
+
+    rows: every signal issued on `date_str` (Tehran). Trades still OPEN are
+    shown as pending; win-rate uses only closed trades. Returns None when
+    there is nothing to report at all (no signals and no older open trades).
+    """
+    total = len(rows)
+    if total == 0 and older_open_count == 0:
+        return None
+
+    wins = [r for r in rows if r.get("status") == "TP_HIT"]
+    losses = [r for r in rows if r.get("status") == "STOP_HIT"]
+    opens = [r for r in rows if r.get("status") == "OPEN"]
+    closed = wins + losses
+
+    pnl_total = sum(float(r.get("final_pnl_usd") or 0.0) for r in rows)
+    fee_total = sum(float(r.get("broker_fee_usd") or 0.0) for r in rows)
+
+    def _side(direction):
+        sel = [r for r in rows if r.get("direction", "").upper() == direction]
+        w = sum(1 for r in sel if r.get("status") == "TP_HIT")
+        p = sum(float(r.get("final_pnl_usd") or 0.0) for r in sel)
+        return len(sel), w, p
+
+    long_n, long_w, long_p = _side("LONG")
+    short_n, short_w, short_p = _side("SHORT")
+
+    best = max(closed, key=lambda r: float(r.get("final_pnl_usd") or 0.0), default=None)
+    worst = min(closed, key=lambda r: float(r.get("final_pnl_usd") or 0.0), default=None)
+
+    lines = [
+        f"<b>╔═ 📋 DAILY REPORT ═╗</b>",
+        f"<b>گزارش سیگنال‌های {escape(date_str)}</b>",
+        f"╚════════════════════╝",
+        "",
+        f"📊 <b>سیگنال‌ها:</b> <b>{total}</b> عدد",
+        f"  ├─ 🏆 تیک‌پروفت: <b>{len(wins)}</b>",
+        f"  ├─ 🛑 حد ضرر: <b>{len(losses)}</b>",
+        f"  └─ ⏳ هنوز باز: <b>{len(opens)}</b>",
+    ]
+    if closed:
+        wr = 100.0 * len(wins) / len(closed)
+        lines.append(f"📈 <b>نرخ برد:</b> <code>{wr:.1f}%</code> ({len(wins)}/{len(closed)} معامله بسته‌شده)")
+    lines += [
+        f"💰 <b>PnL خالص روز:</b> <b>{_dollar(pnl_total)}</b>",
+        f"🧾 کارمزد کل: <b>${fee_total:.2f}</b>",
+        "",
+        f"🟢 لانگ: {long_n} سیگنال · {long_w} برد · <b>{_dollar(long_p)}</b>",
+        f"🔴 شورت: {short_n} سیگنال · {short_w} برد · <b>{_dollar(short_p)}</b>",
+    ]
+    if best is not None and float(best.get("final_pnl_usd") or 0.0) > 0:
+        lines.append(f"⭐ بهترین: {escape(best.get('symbol',''))} {escape(best.get('direction',''))} <b>{_dollar(float(best['final_pnl_usd']))}</b>")
+    if worst is not None and float(worst.get("final_pnl_usd") or 0.0) < 0:
+        lines.append(f"💀 بدترین: {escape(worst.get('symbol',''))} {escape(worst.get('direction',''))} <b>{_dollar(float(worst['final_pnl_usd']))}</b>")
+    if older_open_count > 0:
+        lines.append(f"⏳ باز از روزهای قبل: <b>{older_open_count}</b> معامله (نتیجه پس از بسته‌شدن ریپلای می‌شود)")
+    lines.append("")
+    lines.append("<i>گزارش خودکار شبانه · کندل 1m · کارمزد و اسلیپیج لحاظ شده است</i>")
+    return "\n".join(lines)

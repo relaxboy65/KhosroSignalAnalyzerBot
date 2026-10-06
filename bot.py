@@ -9,13 +9,16 @@ import aiohttp
 from config import (
     SYMBOLS, VERSION, TIMEFRAMES, LEVERAGE, MARGIN_USD,
     BROKER_FEE_RATE, SLIPPAGE_PCT, RESOLUTION_TIMEFRAME,
-    TELEGRAM_MIN_INTERVAL_SECONDS,
+    TELEGRAM_MIN_INTERVAL_SECONDS, SIGNAL_MAX_AGE_HOURS,
     CANDLE_RETENTION_DAYS, RESOLUTION_LOOKBACK_DAYS,
 )
 from rules import analyze_market, analyze_with_ai, send_to_telegram, is_forbidden_hour, can_issue_signal, record_signal_issued
-from signal_store import append_signal_row, tehran_time_str, load_open_signals, resolve_signal
+from signal_store import append_signal_row, tehran_time_str, load_open_signals, resolve_signal, should_expire
 from telegram_ui import signal_message, resolution_message
-from candle_store import upsert_candles, load_candles, latest_timestamp, prune_old_candles
+from candle_store import (
+    upsert_candles, load_candles, latest_timestamp,
+    prune_old_candles, enforce_db_size_limit,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -161,6 +164,30 @@ async def _sync_1m_symbol(session, symbol, days_if_empty=RESOLUTION_LOOKBACK_DAY
     return True
 
 
+async def _close_expired(row, exit_price):
+    """v11.2: close a stale-OPEN trade as EXPIRED at the current price.
+
+    Prevents a symbol from being muted forever when TP/SL are never touched.
+    Message send failure keeps the trade OPEN for a retry next run.
+    """
+    direction = row['direction'].upper()
+    exit_price = _adjust_exit_for_slippage(direction, exit_price)
+    pnl, fee = _price_pnl(row, exit_price)
+    margin = float(row.get('position_margin_usd') or MARGIN_USD)
+    lev = float(row.get('leverage') or LEVERAGE)
+    msg = resolution_message(row, 'EXPIRED', exit_price, pnl, fee, margin, lev)
+    reply_to = row.get('telegram_message_id') or None
+    mid = await send_to_telegram(msg, reply_to_message_id=reply_to)
+    if mid is None:
+        logger.warning('%s: expiry message failed; keeping trade OPEN for retry', row['symbol'])
+        return False
+    if resolve_signal(row, tehran_time_str(), exit_price, pnl, fee, 'EXPIRED', mid):
+        logger.info('EXPIRED %s %s after max age (%sh); pnl=%.4f',
+                    row['symbol'], row['direction'], SIGNAL_MAX_AGE_HOURS, pnl)
+        return True
+    return False
+
+
 async def resolve_previous_signals(session, open_rows):
     if not open_rows:
         return 0
@@ -172,8 +199,20 @@ async def resolve_previous_signals(session, open_rows):
         if not await _sync_1m_symbol(session, symbol):
             logger.warning('%s: 1m resolution data unavailable; keeping OPEN and not advancing checkpoint', symbol)
             continue
-        start = min(int(float(r.get('last_checked_epoch') or r.get('issued_at_epoch') or 0)) for r in rows)
         end = int(datetime.now(timezone.utc).timestamp())
+        # v11.2: expire stale-OPEN signals (SIGNAL_MAX_AGE_HOURS) first
+        remaining = []
+        for row in rows:
+            if should_expire(row, end, SIGNAL_MAX_AGE_HOURS):
+                recent = load_candles(symbol, start_at=end - 3600, end_at=end)
+                if recent and await _close_expired(row, recent[-1]['c']):
+                    resolved += 1
+                    continue
+            remaining.append(row)
+        rows = remaining
+        if not rows:
+            continue
+        start = min(int(float(r.get('last_checked_epoch') or r.get('issued_at_epoch') or 0)) for r in rows)
         candles = load_candles(symbol, start_at=start, end_at=end)
         for row in rows:
             outcome, exit_price, pnl, fee, hit_epoch, checkpoint = _resolve_from_1m(row, candles)
@@ -247,7 +286,12 @@ async def main_async():
     reset_budget()
     connector = aiohttp.TCPConnector(limit=8)
     async with aiohttp.ClientSession(connector=connector) as session:
-        prune_old_candles()
+        # v11.2: retention is short (12d) and a hard size guard keeps
+        # market_data.db safely below the GitHub 100MB push limit.
+        pruned = prune_old_candles()
+        report = enforce_db_size_limit()
+        logger.info('DB maintenance: pruned=%d size=%.1fMB guard=%s',
+                    pruned, report['size_mb'], report['actions'] or 'ok')
         open_rows = load_open_signals()
         logger.info('Checking %d previous OPEN signal(s) with 1m candles before new signals', len(open_rows))
         await resolve_previous_signals(session, open_rows)

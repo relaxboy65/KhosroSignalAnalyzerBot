@@ -1,2 +1,3 @@
-# market_data.db is normal git (not LFS) to avoid pointer files breaking SQLite on Actions.
-# If DB exceeds ~80MB later, enable LFS manually and set checkout lfs: true.
+# market_data.db is normal git (not LFS). v11.2 keeps it at a 12-day window
+# (~45MB) with VACUUM + a hard 80MB size guard, so the 100MB GitHub push
+# limit can no longer be reached. If you raise retention, monitor the size.

@@ -1,8 +1,29 @@
-# KhosroSignalAnalyzerBot — v11.1.0
+# KhosroSignalAnalyzerBot — v11.3.0
 
-**Khosro Confluence Engine + AI Committee** — موتور سیگنال‌دهی چندتایم‌فریمی کریپتو با ۱۰ مؤلفه SMC/تکنیکال و **کمیته وزن‌دهی ۷ سرویس هوش مصنوعی رایگان** (OpenRouter / Mistral / Cerebras / SiliconFlow).
+**Khosro Confluence Engine + AI Committee** — موتور سیگنال‌دهی چندتایم‌فریمی کریپتو با ۱۰ مؤلفه SMC/تکنیکال، **کمیته وزن‌دهی تا ۷ سرویس هوش مصنوعی رایگان**، **سقف‌های سخت ریسک** و **گزارش روزانه تلگرام** (v11.3).
 
 > ⚠️ این پروژه ابزار تحلیل و بک‌تست است و سود یا دقت تضمین‌شده ندارد. اهرم ریسک را چند برابر می‌کند. قبل از استفاده واقعی، Paper Trading و کنترل ریسک مستقل انجام دهید.
+
+## چه چیزهایی تغییر کرد (خلاصه مدیریتی)
+
+### جدید در v11.3.0
+
+| قابلیت | توضیح |
+|---|---|
+| **گزارش روزانه تلگرام** | هر شب ~۰۱:۰۰ به وقت تهران (22:30 UTC)، خلاصه عملکرد روز قبل: تعداد سیگنال، تیک‌پروفت/حد ضرر/باز، نرخ برد، PnL خالص و کارمزد، تفکیک لانگ/شورت، بهترین و بدترین معامله |
+| بدون اسپم | روز بدون سیگنال و بدون معامله باز، پیامی ارسال نمی‌شود |
+| اجرای دستی | `python daily_report.py --print` یا `--date YYYY-MM-DD` |
+
+### سخت‌سازی‌های v11.2.0 (حفظ شده)
+
+| مشکل نسخه قبل (از ledger واقعی ۱۷ روزه) | راه‌حل v11.2 |
+|---|---|
+| استاپ ساختاری بدون سقف → SL تا ۶.۵٪ و ضرر تا -۱۱۰٪ مارجین | **سقف سخت استاپ**: حداکثر ۳٪ فاصله از ورود (min(۳٪, ۲.۵×ATR)) و کف ۰.۵٪ |
+| شورت‌ها ۰–۱۴٪ وین‌ریت و منفی خالص | **گیت شورت**: هر دو روند 4h/1h باید ≥۰.۶۰ باشند + امتیاز نهایی ≥۷۲ (لانگ: ۶۲) |
+| `market_data.db` = ۹۵.۷MB و نزدیک سقف ۱۰۰MB push گیت‌هاب | **retention ۱۲ روزه + VACUUM بعد از هر prune + گارد سخت ۸۰MB** |
+| تداخل کامیت دو workflow هم‌زمان روی db | **گروه `concurrency: khosro-state`** روی هر ۴ workflow |
+| سیگنال‌های OPEN قدیمی نماد را برای همیشه قفل می‌کردند | **انقضای خودکار بعد از ۹۶ ساعت** با پیام تلگرام و وضعیت `EXPIRED` |
+| پوشه `tests/` حذف شده بود | **بازگشت تست‌ها + ۱۲ تست جدید** برای سقف‌های ریسک، گیت شورت، انقضا و گارد دیتابیس |
 
 ## تغییر اصلی v10
 
@@ -29,51 +50,24 @@ OPEN
     ↓
 بررسی **1m candles** بعد از زمان سیگنال
     ↓
-TP یا SL ؟
-    ├── TP → محاسبه PnL → پیام جدید Reply به پیام اصلی
-    └── SL → محاسبه PnL → پیام جدید Reply به پیام اصلی
+TP یا SL ؟ (یا عمر > 96h → EXPIRED)
+    ├── TP      → محاسبه PnL → پیام Reply به پیام اصلی
+    ├── SL      → محاسبه PnL → پیام Reply به پیام اصلی
+    └── EXPIRED → بستن به قیمت روز در ۹۶ ساعت، رفع قفل نماد
 ```
 
 اگر یک کندل هم‌زمان هم SL و هم TP را لمس کند، ترتیب واقعی intrabar از OHLC قابل تشخیص نیست؛ سیستم محافظه‌کارانه **STOP first** را انتخاب می‌کند.
 
-تا زمانی که سیگنال یک نماد OPEN است، ربات برای همان نماد سیگنال جدید صادر نمی‌کند تا معاملات روی یک دارایی روی هم انباشته نشوند.
+تا زمانی که سیگنال یک نماد OPEN است، ربات برای همان نماد سیگنال جدید صادر نمی‌کند تا معاملات روی یک دارایی روی هم انباشته نشوند. (v11.2: با انقضای ۹۶ ساعته، نماد دیگر برای همیشه قفل نمی‌شود.)
 
-## پیام‌های تلگرام
-
-پیام سیگنال با HTML Telegram API، بخش‌بندی واضح، **نسخه ربات (v11.1.0)**، Confidence، Entry/SL/TP، R:R، سرمایه، اهرم، حجم اسمی و مهم‌ترین عوامل ساخته می‌شود (بدون متن هشدار تکراری).
-
-پس از بسته‌شدن معامله، پیام نتیجه **به‌صورت Reply مستقیم به پیام اصلی همان سیگنال** ارسال می‌شود. `telegram_message_id` در ledger نگهداری می‌شود.
-
-اگر پیام اصلی به هر دلیل Message ID نداشته باشد، نتیجه همچنان ارسال می‌شود اما Reply مستقیم ممکن نیست.
-
-## Ledger و داده‌های سیگنال
-
-فایل‌های قدیمی نسخه‌های قبلی پاک شده‌اند و پروژه از امروز با این فایل شروع می‌شود:
-
-```text
-signals/2026-09-04.csv
-```
-
-فایل در شروع خالی است و فقط header دارد. از این به بعد هر روز ledger جداگانه ساخته می‌شود و سیگنال‌های OPEN روزهای قبل نیز قابل پیگیری هستند.
-
-ستون‌های مهم:
-
-- `status`
-- `issued_at_epoch`
-- `position_margin_usd`
-- `leverage`
-- `notional_usd`
-- `final_pnl_usd`
-- `broker_fee_usd`
-- `telegram_message_id`
-- `resolution_message_id`
-
-## موتور سیگنال (v11)
+## موتور سیگنال (v11.2)
 
 ```text
 Market Data (5m/15m/30m/1h/4h)
    ↓
-گیت روند HTF  (4h + 1h باید هم‌جهت باشند — بدون وزن، فقط فیلتر)
+گیت روند HTF  (4h + 1h هم‌جهت)
+   │   · LONG  : امتیاز روند هر دو ≥ 0.35
+   │   · SHORT : امتیاز روند هر دو ≥ 0.60  ← گیت سخت‌گیرانه‌تر v11.2
    ↓
 گیت نوسان  (ATR% ≤ حد مجاز — بدون وزن، فقط فیلتر)
    ↓
@@ -83,20 +77,47 @@ Market Data (5m/15m/30m/1h/4h)
    ↓
 rule_score ≥ 60 ؟ ─── خیر ──→ NO SIGNAL (صرفه‌جویی در سهمیه AI)
    ↓ بله
-کمیته AI (۳ سرویس رایگان، رأی وزن‌دهی)
+کمیته AI (تا ۷ سرویس رایگان، رأی وزن‌دهی)
    ↓
 امتیاز نهایی وزن‌دهی ۰–۱۰۰ (وزن AI = ۲۵، بزرگ‌ترین وزن)
    ↓
+آستانه سیگنال: LONG ≥ 62 · SHORT ≥ 72  ← v11.2
+   ↓
 SIGNAL / NO SIGNAL (رأی منفی AI سیگنال را وتو می‌کند)
    ↓
-Entry / SL / TP / R:R
+Entry / SL (سقف‌دار) / TP / R:R
 ```
+
+## سقف‌های سخت استاپ (v11.2 — مهم‌ترین فیکس)
+
+قبلاً اگر پیوت ساختاری دور بود، همان پیوت جایگزین استاپ ATR می‌شد **بدون هیچ سقفی** — در ledger واقعی SL تا ۶.۵٪ ثبت شده که با اهرم 10x یعنی -۶۵٪ تا -۱۱۰٪ مارجین. الان هر استاپ نهایی (ATR یا ساختاری) از این لوله رد می‌شود:
+
+```text
+فاصله استاپ = clamp(fاصله فعلی,
+                حداقل: 0.5٪ قیمت            (جلوگیری از استاپ نویزی)
+                حداکثر: min(3٪ قیمت, 2.5×ATR))
+```
+
+- بدترین سناریوی برخورد SL: **10x × 3٪ = ۳۰٪ مارجین** (قبلاً بی‌نهایت بود).
+- بعد از clamp، **TP از فاصله نهایی بازمحاسبه می‌شود** تا نسبت R:R دقیقاً ثابت بماند (2.0–2.4 بسته به ریسک).
+- پیام تلگرام حالا **«فاصله SL ٪»** را هم نشان می‌دهد تا ریسک هر سیگنال در یک نگاه دیده شود.
+- استاپ ساختاری فقط وقتی جایگزین استاپ ATR می‌شود که واقعاً فضای بیشتری بدهد (≥۰.۸× فاصله ATR)؛ برای LONG و SHORT قرینه شده است.
+
+پارامترها در `config.py`: `STOP_MAX_PCT=0.030`، `STOP_MIN_PCT=0.005`، `STRUCT_STOP_MAX_ATR=2.5`.
+
+## فیلتر شورت (v11.2)
+
+داده ۱۷ روزه معاملات واقعی: شورت‌ها ۰٪ تا ۱۳.۹٪ وین‌ریت با PnL منفی خالص. سه لایه دفاعی اضافه شد:
+
+1. **گیت HTF سخت**: برای SHORT هر دو روند 4h و 1h باید امتیاز ≥ 0.60 بگیرند (لانگ 0.35) — یعنی EMA55 صعودی‌به‌نزولی + تأیید قیمت/ADX هم‌زمان.
+2. **آستانه امتیاز بالاتر**: SHORT فقط با امتیاز نهایی ≥ 72 (لانگ 62) سیگنال می‌شود.
+3. **پرامپت AI سخت‌گیرانه‌تر**: قانون ۶ به `AI_RULES_TEXT` اضافه شد — کمیته فقط شورت با order flow و volume profile صریحاً نزولی را تأیید کند.
 
 ## مدل امتیازدهی (v11)
 
 | رتبه | مؤلفه | وزن |
 |---:|---|---:|
-| ۱ | **کمیته هوش مصنوعی (۳ سرویس رایگان)** | **25** |
+| ۱ | **کمیته هوش مصنوعی** | **25** |
 | ۲ | Order Flow (اوردر فلو) | 14 |
 | ۳ | Volume Profile (POC + Value Area) | 11 |
 | ۴ | Sweep (سوییپ لیکوییدیتی) | 10 |
@@ -115,36 +136,38 @@ Entry / SL / TP / R:R
 - رأی هر سرویس AI: approve → `confidence/100`، reject → `((100-confidence)/100)×0.5`.
 - رأی منفی اکثریت کمیته، سیگنال را **وتو** می‌کند حتی اگر امتیاز قوانین بالا باشد.
 
-## کمیته هوش مصنوعی
+## کمیته هوش مصنوعی (تا ۷ سرویس رایگان)
 
-| سرویس | مدل اصلی | وزن رأی | کلید (Environment/Secret) |
+| سرویس | مدل اصلی | وزن رأی | کلید (Secret) |
 |---|---|---:|---|
-| OpenRouter | `nvidia/nemotron-3-super-120b-a12b:free` (+۳ مدل جایگزین) | 35 | `OPENROUTER_API_KEY` |
-| Mistral | `open-mistral-nemo` | 30 | `MISTRAL_API_KEY` |
-| Cerebras | `llama-3.3-70b` | 25 | `CEREBRAS_API_KEY` |
-| SiliconFlow | `Qwen/Qwen2.5-7B-Instruct` | 10 | `SILICONFLOW_API_KEY` |
+| OpenRouter | `nvidia/nemotron-3-super-120b-a12b:free` (+۳ جایگزین: `z-ai/glm-5.2:free`، `google/gemma-4-31b-it:free`، `nex-agi/nex-n2.5-mini:free`) | 18 | `OPENROUTER_API_KEY` |
+| Groq | `openai/gpt-oss-20b` (+۲ جایگزین) | 16 | `GROQ_API_KEY` |
+| Mistral | `open-mistral-nemo` | 14 | `MISTRAL_API_KEY` |
+| Cerebras | `llama3.1-8b` (+۲ جایگزین) | 14 | `CEREBRAS_API_KEY` |
+| SambaNova | `Meta-Llama-3.3-70B-Instruct` | 14 | `SAMBANOVA_API_KEY` |
+| SiliconFlow | `Qwen/Qwen2.5-7B-Instruct` | 12 | `SILICONFLOW_API_KEY` |
+| Cloudflare | `@cf/meta/llama-3.1-8b-instruct-fast` (+۲ جایگزین) | 12 | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` |
 
-- هر چهار سرویس OpenAI-compatible و رایگان‌اند؛ اگر یک سرویس خطا بدهد (rate-limit/موجودی)، بقیه رأی می‌دهند و کمیته ادامه می‌دهد.
-- اگر مدل اصلی OpenRouter موقتاً rate-limit شود، به‌ترتیب روی ۳ مدل رایگان جایگزین تلاش می‌شود.
+- همه سرویس‌ها OpenAI-compatible هستند؛ جمع وزن‌ها ۱۰۰ است. اگر سرویسی کلید نداشته باشد یا خطا بدهد، بقیه رأی می‌دهند.
 - خروجی هر رأی JSON سخت‌گیرانه `decision/confidence/reason` است (مدل‌های reasoning هم پشتیبانی می‌شوند).
-- بودجه مصرف: حداکثر ۶ فراخوانی در هر اجرا و ۴۰ در روز (`AI_MAX_CALLS_PER_RUN`, `AI_DAILY_BUDGET`).
-- اگر هیچ سرویسی در دسترس نباشد، کمیته «غیرفعال» می‌شود و مؤلفه AI خنثی (۰.۵) حساب می‌شود (قطعی شبکه هرگز سیگنال را خودکار تایید یا رد نمی‌کند).
-- قوانین معاملاتی شما برای AI از `AI_RULES_TEXT` در `config.py` خوانده می‌شود و داخل پرامپت تزریق می‌گردد.
+- بودجه مصرف: حداکثر ۶ فراخوانی در هر اجرا و ۵۰ در روز (`AI_MAX_CALLS_PER_RUN`, `AI_DAILY_BUDGET`).
+- اگر هیچ سرویسی در دسترس نباشد، مؤلفه AI خنثی (۰.۵) حساب می‌شود — قطعی شبکه هرگز سیگنال را خودکار تایید یا رد نمی‌کند.
+- پیام تلگرام فهرست رأی هر API (APPROVE/REJECT/FAIL + مدل + دلیل) را نشان می‌دهد.
 
 آستانه‌ها:
 
 - 78+ → LOW
 - 68–77.99 → MEDIUM
-- 62–67.99 → HIGH
-- کمتر از 62 → NO SIGNAL
+- 62–67.99 → HIGH (SHORT: 72–77.99 → HIGH)
+- کمتر از 62 (SHORT: کمتر از 72) → NO SIGNAL
 
 ## مدیریت SL/TP
 
-| Risk | ATR Stop | R:R پایه |
-|---|---:|---:|
-| LOW | 1.4× ATR | 2.4R |
-| MEDIUM | 1.6× ATR | 2.1R |
-| HIGH | 1.9× ATR | 2.0R |
+| Risk | ATR Stop پایه | R:R پایه | بدترین ضرر SL (اهرم 10x، بعد از سقف v11.2) |
+|---|---:|---:|---:|
+| LOW | 1.4× ATR | 2.4R | ≤ 30٪ مارجین |
+| MEDIUM | 1.6× ATR | 2.1R | ≤ 30٪ مارجین |
+| HIGH | 1.9× ATR | 2.0R | ≤ 30٪ مارجین |
 
 ## PnL با $10 و اهرم 10x
 
@@ -162,9 +185,7 @@ Gross PnL = $100 × (Entry - Exit) / Entry
 Net PnL = Gross PnL - round_trip_fee
 ```
 
-بنابراین بازده درصدی گزارش‌شده نسبت به **$10 سرمایه/مارجین** است، نه نسبت به $100 حجم اسمی.
-
-مثلاً حرکت 2% در جهت معامله تقریباً $2 سود ناخالص روی حجم $100 ایجاد می‌کند، قبل از کارمزد و slippage.
+بازده درصدی گزارش‌شده نسبت به **$10 مارجین** است. مثلاً حرکت 2% در جهت معامله تقریباً $2 سود ناخالص روی حجم $100 ایجاد می‌کند، قبل از کارمزد و slippage.
 
 ## اجرای ربات
 
@@ -176,90 +197,77 @@ export TELEGRAM_BOT_TOKEN="..."
 export TELEGRAM_CHAT_ID="..."
 export OPENROUTER_API_KEY="..."    # openrouter.ai
 export MISTRAL_API_KEY="..."       # console.mistral.ai
+export GROQ_API_KEY="..."          # console.groq.com/keys
+export CEREBRAS_API_KEY="..."      # cloud.cerebras.ai
 export SILICONFLOW_API_KEY="..."   # cloud.siliconflow.com
+export SAMBANOVA_API_KEY="..."     # cloud.sambanova.ai
+export CLOUDFLARE_API_TOKEN="..."  # + CLOUDFLARE_ACCOUNT_ID
 
 python bot.py
 ```
 
-Windows PowerShell:
-
-```powershell
-$env:TELEGRAM_BOT_TOKEN="..."
-$env:TELEGRAM_CHAT_ID="..."
-$env:OPENROUTER_API_KEY="..."
-$env:MISTRAL_API_KEY="..."
-$env:SILICONFLOW_API_KEY="..."
-python bot.py
-```
+هیچ‌کدام از کلیدهای AI اجباری نیستند؛ بدون آن‌ها ربات حالت فقط-قوانین (AI خنثی) اجرا می‌شود. فقط `TELEGRAM_BOT_TOKEN` و `TELEGRAM_CHAT_ID` برای ارسال پیام لازم‌اند.
 
 ## رفتار هر اجرای ربات
 
-1. فایل‌های signal را می‌خواند.
-2. همه سیگنال‌های `OPEN` را پیدا می‌کند.
-3. برای نمادهای دارای معامله باز، فقط داده **1m** برای تعیین دقیق TP/SL می‌گیرد.
-4. از اولین کندل بسته‌شده بعد از زمان سیگنال، TP/SL را بررسی می‌کند.
-5. در صورت برخورد، PnL واقعی شبیه‌سازی‌شده را محاسبه می‌کند.
-6. نتیجه را در یک پیام جدید Reply به پیام اصلی می‌فرستد.
-7. CSV را به `TP_HIT` یا `STOP_HIT` تغییر می‌دهد.
-8. سپس دوباره ledger را می‌خواند.
-9. برای نمادهایی که دیگر OPEN نیستند، اجازه تحلیل سیگنال جدید می‌دهد.
+1. نگهداری دیتابیس: prune کندل‌های قدیمی‌تر از ۱۲ روز + VACUUM + **گارد سخت حجم ۸۰MB**.
+2. فایل‌های signal را می‌خواند و همه سیگنال‌های `OPEN` را پیدا می‌کند.
+3. سیگنال‌های OPEN با عمر بیش از ۹۶ ساعت به‌عنوان `EXPIRED` بسته می‌شوند (پیام تلگرام + PnL به قیمت روز).
+4. برای نمادهای دارای معامله باز، داده **1m** برای تعیین دقیق TP/SL می‌گیرد (بک‌فیل خودکار ۱۰ روزه اگر دیتابیس خالی باشد).
+5. از اولین کندل بسته‌شده بعد از زمان سیگنال، TP/SL را بررسی می‌کند (چک‌پوینت `last_checked_epoch`).
+6. در صورت برخورد، PnL واقعی شبیه‌سازی‌شده را محاسبه و در Reply پیام اصلی می‌فرستد.
+7. سپس برای نمادهای آزاد، تحلیل دو-فازی (قوانین → کمیته AI) انجام می‌دهد.
 
-## نکته مهم درباره تشخیص خروج
+## دیتابیس 1m و سقف ۱۰۰MB گیت‌هاب (v11.2)
 
-ربات برای جلوگیری از look-ahead از کندل‌های بسته‌شده استفاده می‌کند. اگر TP و SL در یک کندل لمس شوند، به علت نبود اطلاعات tick-by-tick، **SL اول** در نظر گرفته می‌شود.
+`market_data.db` کش چرخشی کندل‌های ۱ دقیقه‌ای برای resolve معاملات و بک‌تست است. در v11.1 این فایل با retention ۹۰ روزه روزی ~۳.۷MB بزرگ می‌شد و در ۲۶ روز به ۹۵.۷MB رسید — چند قدم تا **سقف سخت ۱۰۰MB فایل در گیت‌هاب** که push را برای همیشه می‌شکند.
 
-## تعیین نتیجه با کندل 1 دقیقه‌ای
+چهار لایه محافظت در v11.2:
 
-سیگنال‌ها همچنان با تایم‌فریم‌های استراتژی (30m/1h/4h و سایر ورودی‌های موتور) ساخته می‌شوند، اما **فقط برای lifecycle معامله** از کندل 1m استفاده می‌شود. این کار زمان برخورد TP/SL را دقیق‌تر می‌کند و از خطای بزرگ‌تر شدن دامنه داخل یک کندل 5m جلوگیری می‌کند.
+1. **retention ۱۲ روزه** (`CANDLE_RETENTION_DAYS`) — پوشش کامل lookback ۱۰ روزه resolver + حاشیه؛ حجم تثبیت‌شده ≈ ۴۵MB.
+2. **VACUUM بعد از هر prune** — بدون آن SQLite فضای حذف‌شده را پس نمی‌دهد و فایل در high-water mark می‌ماند.
+3. **گارد سخت ۸۰MB** (`enforce_db_size_limit`) — اگر فایل از سقف رد شود، retention موقتاً تا ۵ روز سفت می‌شود و دوباره VACUUM می‌شود.
+4. **گروه concurrency واحد** (`khosro-state`) روی هر ۴ workflow — دیگر دو اجرای هم‌زمان نمی‌توانند روی db/CSV کامیت متناقض بزنند.
 
-- فقط کندل‌های 1m بسته‌شده بررسی می‌شوند.
-- `last_checked_epoch` در ledger ذخیره می‌شود؛ بنابراین هر اجرای ربات فقط بخش جدید داده را دوباره بررسی می‌کند.
-- دریافت 1m صفحه‌بندی شده است و محدودیت 1500 کندل هر درخواست KuCoin را دور می‌زند.
-- اگر در یک دقیقه هر دو TP و SL لمس شوند، چون ترتیب intrabar از OHLC مشخص نیست، سیاست محافظه‌کارانه **STOP first** اعمال می‌شود.
+اگر ریپوی فعلی‌تان قبلاً تاریخچه سنگینی از blobهای db دارد، یک‌بار می‌توانید ریپو را تازه (orphan branch) شروع کنید؛ از این به بعد رشد ریپو حداقلی است.
 
 ## کنترل محدودیت Telegram
 
-Telegram برای یک chat توصیه می‌کند بیشتر از یک پیام در ثانیه ارسال نشود و برای group نیز محدودیت جداگانه دارد. این نسخه ارسال‌ها را در یک صف منطقی سریالی می‌کند، بین پیام‌ها حداقل **1.10 ثانیه** فاصله می‌گذارد و در پاسخ HTTP 429 مقدار `retry_after` را رعایت می‌کند. در نتیجه اگر چند معامله هم‌زمان بسته شوند، پیام‌های نتیجه پشت‌سرهم ولی کنترل‌شده ارسال می‌شوند؛ هیچ نتیجه‌ای عمداً به‌خاطر rate limit حذف نمی‌شود. citeturn0search1turn0search0
+ارسال‌ها در یک صف سریالی با حداقل فاصله **3.2 ثانیه** و رعایت `retry_after` در پاسخ 429 انجام می‌شود؛ اگر چند معامله هم‌زمان بسته شوند، پیام‌ها پشت‌سرهم ولی کنترل‌شده ارسال می‌شوند و هیچ نتیجه‌ای عمداً حذف نمی‌شود.
 
 ## بک‌تست
 
-برای بک‌تست چندماهه واقعی، سیگنال‌سازی همچنان با تایم‌فریم‌های تحلیلی انجام می‌شود؛ برای تعیین نتیجه معامله باید **OHLCV خام 1m** نیز در دسترس باشد:
-
 ```bash
+# از دیتابیس 1m محلی:
+python backtest.py --db market_data.db --symbol BTC-USDT
+
+# یا با CSV 5m دانلودی:
 python download_backtest_data.py --symbol BTC-USDT --days 180
 python backtest.py --symbol BTCUSDT --data-dir backtest_data --out backtest_report.txt
 ```
 
-برای ETH:
-
-```bash
-python download_backtest_data.py --symbol ETH-USDT --days 180
-python backtest.py --symbol ETHUSDT --data-dir backtest_data --out eth_report.txt
-```
-
-Backtest نیز باید از مدل سرمایه جدید استفاده کند: $10 margin × 10x = $100 notional. نتیجه قبلی پروژه که با داده‌های تاریخی موجود محاسبه شده بود، **baseline نسخه قبلی** است و نتیجه v10 محسوب نمی‌شود.
+بک‌تست همان `analyze_market` نسخه v11.2 را استفاده می‌کند (AI خنثی = 0.5، deterministic)؛ یعنی سقف استاپ و گیت شورت در بک‌تست هم اعمال می‌شوند.
 
 ## تست و کنترل کیفیت
-
-قبل از انتشار نسخه:
 
 ```bash
 python -m compileall -q .
 python -m unittest discover -s tests -v
 ```
 
-تست‌ها موارد زیر را پوشش می‌دهند:
+پوشش تست‌ها:
 
-- Indicatorها
-- ADX / DI
-- Stochastic K/D
-- شکل خروجی Analyzer
-- اجرای Backtest
-- ساخت ledger جدید
-- مدل $10 × 10x
-- ذخیره Message ID تلگرام
-- resolve کردن OPEN → TP/SL
-- ذخیره Resolution Message ID
+- Indicatorها (EMA/RSI/MACD/ATR/ADX/Stochastic)
+- شکل خروجی Analyzer (۱۲ مؤلفه + فیلدهای جدید v11.2)
+- **سقف‌های استاپ**: فاصله هر استاپ (ATR/ساختاری، هر دو جهت، هر سه ریسک) در بازه [۰.۵٪، ۳٪] — رگرسیون باگ SL ۶.۵٪
+- **حفظ دقیق R:R بعد از clamp**
+- **گیت شورت**: آستانه ۷۲ + گیت HTF ۰.۶۰ (تست داده ضعیف نزولی)
+- **انقضای ۹۶ ساعته** + عدم اعمال روی رکوردهای resolved
+- **VACUUM و گارد حجم دیتابیس** (با db موقت واقعی)
+- چرخه ledger: $10×10x، message id، resolve، EXPIRED
+- پیام‌های تلگرام (فاصله SL + پیام EXPIRED)
+- **گزارش روزانه**: اعداد روز مختلط، روز خالی، روز بدون معامله بسته، escape نماد، خواندن CSV روز دقیق
+- کمیته AI: استخراج JSON مقاوم، normalize رأی، ساخت پرامپت
 
 ## تنظیمات مهم
 
@@ -271,67 +279,40 @@ LEVERAGE = 10.0
 NOTIONAL_USD = MARGIN_USD * LEVERAGE
 BROKER_FEE_RATE = 0.001
 SLIPPAGE_PCT = 0.0005
+
+# سقف‌های v11.2
+STOP_MAX_PCT = 0.030        # سقف فاصله استاپ
+STOP_MIN_PCT = 0.005        # کف فاصله استاپ
+STRUCT_STOP_MAX_ATR = 2.5   # سقف ATR استاپ ساختاری
+SIGNAL_MAX_AGE_HOURS = 96   # انقضای سیگنال‌های OPEN (0 = خاموش)
+CANDLE_RETENTION_DAYS = 12  # پنجره نگهداری کندل 1m
+DB_MAX_FILE_MB = 80         # گارد حجم دیتابیس
 ```
 
-اگر کارمزد صرافی واقعی شما متفاوت است، `BROKER_FEE_RATE` را تغییر دهید.
+## GitHub Actions
+
+| Workflow | زمان‌بندی | کار |
+|---|---|---|
+| `signal-bot.yml` | هر ۳۰ دقیقه (1–20 UTC) | resolve OPEN + سیگنال جدید + کامیت ledger و db |
+| `collect-1m.yml` | دقیقه ۱۵ و ۴۵ هر ساعت | سیکل incremental جمع‌آوری 1m + کامیت db |
+| `nightly.yml` | 22:30 UTC | resolve + **گزارش روز قبل در تلگرام** + حذف CSVهای قدیمی‌تر از ۹۰ روز |
+| `bootstrap-1m.yml` | دستی | ریست و بک‌فیل ۱۲ روزه db |
+
+هر چهار workflow در گروه `khosro-state` قرار دارند و هم‌زمان اجرا نمی‌شوند.
 
 ## محدودیت‌ها
 
-- این پروژه الگوریتم خصوصی UpsideGPT را در اختیار ندارد.
-- وزن‌ها و فرمول‌های v10 متعلق به این پروژه هستند.
-- OHLCV ترتیب دقیق داخل کندل را نشان نمی‌دهد.
+- OHLCV ترتیب دقیق داخل کندل را نشان نمی‌دهد (به همین دلیل SL-first محافظه‌کارانه اعمال می‌شود).
 - هزینه funding در این مدل لحاظ نشده است.
 - liquidation و maintenance margin صرافی به‌صورت کامل شبیه‌سازی نشده‌اند.
-- اهرم 10x به معنی سود 10 برابر تضمین‌شده نیست؛ PnL بر اساس حجم اسمی محاسبه می‌شود و ریسک لیکوییدیشن جداست.
+- اهرم 10x به معنی سود ۱۰ برابر تضمین‌شده نیست؛ PnL بر اساس حجم اسمی محاسبه می‌شود و ریسک لیکوییدیشن جداست.
 
 ## Version
 
-**11.0.1**
+**11.3.0**
 
-v11.1.0: fix generate_signal name, daily quota, forbidden-hour gate in live bot; Telegram without disclaimer warning; version tag in messages.
-
-v10.1.0 دقت تعیین نتیجه معامله را از 5m به 1m ارتقا می‌دهد و کنترل نرخ ارسال Telegram را اضافه می‌کند.
-
-
-### 1-minute market database
-The bot maintains `market_data.db` (SQLite) as a rolling local cache of 1-minute OHLCV candles. Data older than 90 days is automatically removed.
-
-### Dedicated 1m collector process
-
-For production, run the market-data collector as a **separate process** from the Telegram signal bot. This keeps the 1m data feed alive even when the signal-analysis process is restarted and avoids coupling data collection to signal generation.
-
-Run continuously every 2 minutes (recommended default):
-
-```bash
-python collect_1m_data.py --loop --interval 120
-```
-
-Or use the launcher:
-
-```bash
-./run_collector.sh
-```
-
-The collector is incremental: after the initial backfill it requests only missing 1m candles, writes them to SQLite, and prunes data older than 90 days on every cycle. The same `market_data.db` is then available to the live resolver and the 1m backtester.
-
-For Linux/systemd, `khosro-1m-collector.service.example` is included as a deployment template.
-
-For a new installation, the live bot makes a small safety backfill for symbols that have no cached data. To build the full initial 90-day dataset for later backtests, run:
-
-```bash
-python collect_1m_data.py --days 90
-```
-
-For one symbol:
-
-```bash
-python collect_1m_data.py --symbol BTC-USDT --days 90
-```
-
-Backtest directly from the SQLite database:
-
-```bash
-python backtest.py --db market_data.db --symbol BTC-USDT
-```
-
-The live trade resolver and database use closed 1-minute candles; if TP and SL are both touched inside the same 1-minute candle, the conservative SL-first rule is used.
+- v11.3.0: **گزارش روزانه تلگرام** — هر شب بعد از resolve، خلاصه روز قبل (تعداد/نرخ برد/PnL/لانگ-شورت/بهترین و بدترین) به تلگرام ارسال می‌شود؛ ماژول `daily_report.py` + استپ جدید در `nightly.yml`؛ ادغام کامل تمام سخت‌سازی‌های v11.2.0 با این قابلیت؛ ۳۳ تست.
+- v11.2.0: سقف سخت استاپ (۳٪ / ۲.۵×ATR / کف ۰.۵٪)، گیت سخت‌گیرانه شورت (HTF ۰.۶۰ + امتیاز ۷۲)، retention ۱۲ روزه + VACUUM + گارد ۸۰MB دیتابیس، concurrency گروه، انقضای ۹۶ ساعته سیگنال‌های OPEN، بازگشت و توسعه تست‌ها، نمایش فاصله SL در تلگرام.
+- v11.1.1: مدل‌های AI بعد از خطای زنده اصلاح شدند (Groq `openai/gpt-oss-20b`، Cerebras `llama3.1-8b`، Cloudflare `@cf/meta/llama-3.1-8b-instruct-fast`).
+- v11.1.0: کمیته AI به ۷ سرویس گسترش یافت + گزارش رأی هر API در تلگرام، بودجه ۵۰/روز.
+- v11.0.x: موتور وزن‌دهی ۱۲گانه + کمیته AI + گیت‌های سخت HTF/نوسان، جریان دو-فازی، lifecycle روی کندل 1m با ریپلای نتیجه در تلگرام.

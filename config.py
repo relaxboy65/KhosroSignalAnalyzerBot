@@ -1,6 +1,6 @@
 import os
 
-VERSION = "11.1.1"
+VERSION = "11.3.0"
 STRATEGY_NAME = "Khosro Confluence Engine + AI Committee"
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
@@ -16,14 +16,35 @@ RESOLUTION_TIMEFRAME = '1m'
 RESOLUTION_LOOKBACK_DAYS = 10
 # Rolling local SQLite market-data cache for later 1m backtests.
 CANDLE_DB_PATH = os.getenv('CANDLE_DB_PATH', 'market_data.db')
-CANDLE_RETENTION_DAYS = 90
+# v11.3: 1m candles are only needed for trade resolution (10d lookback) and
+# short-horizon backtests. 90 days made market_data.db grow ~3.7MB/day until it
+# crossed the 100MB GitHub push limit. 12 days ≈ 45MB steady-state.
+CANDLE_RETENTION_DAYS = 12
+# Hard size guard: if the SQLite file exceeds this, retention is temporarily
+# tightened (DB_EMERGENCY_RETENTION_DAYS) and the file is VACUUMed.
+DB_MAX_FILE_MB = 80
+DB_EMERGENCY_RETENTION_DAYS = 5
 TELEGRAM_MIN_INTERVAL_SECONDS = 3.20
 TELEGRAM_MAX_RETRIES = 5
 BASE_TIMEFRAME = '30m'
 FORBIDDEN_HOURS_START = 0
 FORBIDDEN_HOURS_END = 4
 MAX_DAILY_SIGNALS = 30
-COOLDOWN_BARS = 2
+
+# ---------------------------------------------------------------------------
+# v11.2 stop-loss risk caps (fixes -35%/-68% margin blowups of the structural
+# stop). Applies to BOTH the ATR stop and the structure-aware stop:
+#   stop distance ∈ [STOP_MIN_PCT, min(STOP_MAX_PCT, STRUCT_STOP_MAX_ATR × ATR)]
+# Worst-case loss at SL ≈ LEVERAGE × STOP_MAX_PCT = 10 × 3% = 30% of margin.
+# ---------------------------------------------------------------------------
+STOP_MAX_PCT = 0.030        # hard cap: SL never farther than 3% from entry
+STOP_MIN_PCT = 0.005        # floor: 0.5% — protects against noise stopouts
+STRUCT_STOP_MAX_ATR = 2.5   # structural stop may reach at most 2.5×ATR
+
+# v11.3: stale-OPEN guard. Signals still OPEN after this many hours are closed
+# as EXPIRED at the current 1m price so the symbol is not muted forever.
+# Set 0 to disable.
+SIGNAL_MAX_AGE_HOURS = 96
 
 # v11 weight model — user-defined priority (highest to lowest):
 # AI committee > order flow > volume profile > sweep > liquidity > FVG >
@@ -139,7 +160,10 @@ AI_RULES_TEXT = (
     '3) Demand confluence: order flow or volume profile must agree. '
     '4) Reject when R:R is below 2. '
     '5) Prefer setups where price interacts with an unmitigated zone (FVG, '
-    'supply/demand, sweep) instead of chasing extended moves.'
+    'supply/demand, sweep) instead of chasing extended moves. '
+    '6) Be extra skeptical of SHORT setups: live ledger shows shorts losing; '
+    'approve a SHORT only with strong bearish order flow AND volume profile '
+    'AND a clear lower-high structure.'
 )
 
 # Rule-only score (0..100, AI excluded) required BEFORE the AI committee is consulted.
@@ -166,6 +190,10 @@ THRESHOLDS = {
     'level_tolerance': 0.004,
     'max_atr_pct': 0.06,
     'min_rr': 2.0,
+    # v11.2 short-only hard gates (live ledger: SHORT WR 0-14%, net negative).
+    # Shorts need both HTF trends clearly bearish and a higher final score.
+    'short_htf_min': 0.60,
+    'short_signal_score': 72,
 }
 
 RISK_PARAMS = {
@@ -181,3 +209,8 @@ POSITION_SIZE_USD = 10.0
 MARGIN_USD = 10.0
 LEVERAGE = 10.0
 NOTIONAL_USD = MARGIN_USD * LEVERAGE
+
+# Sanity guards for the v11.2 risk model.
+assert 0 < STOP_MIN_PCT < STOP_MAX_PCT < 0.10, 'stop caps out of sane range'
+assert STRUCT_STOP_MAX_ATR >= 1.0, 'structural stop cap must allow >= 1xATR'
+assert DB_EMERGENCY_RETENTION_DAYS < CANDLE_RETENTION_DAYS

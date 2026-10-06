@@ -1,5 +1,5 @@
-name: Signal Bot v11.1.1
-# KhosroSignalAnalyzerBot v11.1.1
+name: Signal Bot v11.3.0
+# KhosroSignalAnalyzerBot v11.3.0
 
 # هر ۳۰ دقیقه در ساعات فعال (تقریباً غیر از نیمه‌شب تهران)
 # Tehran UTC+3:30 → ساعات ممنوعه ۰–۴ تهران ≈ ۲۰:۳۰–۰۰:۳۰ UTC
@@ -7,6 +7,12 @@ on:
   schedule:
     - cron: "0,30 1-20 * * *"
   workflow_dispatch:
+
+# v11.3: all state-touching workflows share one concurrency group so two runs
+# can never commit signals/*.csv or market_data.db at the same time.
+concurrency:
+  group: khosro-state
+  cancel-in-progress: false
 
 jobs:
   run:
@@ -57,7 +63,7 @@ jobs:
       - name: Commit signals + market DB
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Signal bot: update ledger and 1m cache"
+          commit_message: "Signal bot: update ledger and 1m cache (v11.3.0)"
           file_pattern: "signals/*.csv signals/ai_budget_*.json market_data.db"
           skip_dirty_check: false
           skip_fetch: false
